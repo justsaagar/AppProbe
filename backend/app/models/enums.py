@@ -61,6 +61,14 @@ class Verification(StrEnum):
     INFO = "INFO"
 
 
+class RelationshipType(StrEnum):
+    """How findings in a correlation group relate. Uncertain pairs stay separate."""
+
+    DUPLICATE = "DUPLICATE"
+    RELATED = "RELATED"
+    SUPPORTING_EVIDENCE = "SUPPORTING_EVIDENCE"
+
+
 class ToolStatus(StrEnum):
     AVAILABLE_AND_EXECUTED = "AVAILABLE_AND_EXECUTED"
     AVAILABLE_BUT_FAILED = "AVAILABLE_BUT_FAILED"

@@ -11,7 +11,9 @@ from app.models.advisory import VulnerabilityAssessment
 from app.models.enums import (
     ArtifactKind,
     Platform,
+    RelationshipType,
     ScanStatus,
+    Severity,
     ToolExecutionStatus,
     ToolStatus,
 )
@@ -64,6 +66,23 @@ class CorrelatedGroup(BaseModel):
     sources: list[str] = Field(default_factory=list)
     canonical_id: str | None = None
     note: str = ""
+    group_id: str = ""
+    relationship: RelationshipType = RelationshipType.DUPLICATE
+    primary_finding_id: str | None = None
+    related_finding_ids: list[str] = Field(default_factory=list)
+    severity: Severity | None = None
+    confidence: float | None = None
+
+
+class CorrelationSummary(BaseModel):
+    """Measured correlation coverage. Values are never fabricated."""
+
+    raw_findings: int = 0
+    correlated_findings: int = 0
+    exact_duplicates_merged: int = 0
+    related_groups: int = 0
+    independent_findings: int = 0
+    duplicate_groups: int = 0
 
 
 class ApplicationMetadata(BaseModel):
@@ -108,6 +127,8 @@ class ScanJob(BaseModel):
     severity_counts: dict[str, int] = Field(default_factory=dict)
     tool_runs: list[ToolRunRecord] = Field(default_factory=list)
     correlated_groups: list[CorrelatedGroup] = Field(default_factory=list)
+    raw_findings: list[Finding] = Field(default_factory=list)
+    correlation_summary: CorrelationSummary | None = None
     secret_scan_coverage: SecretScanCoverage | None = None
     technology_inventory: list[TechnologyRecord] = Field(default_factory=list)
     dependency_scan_coverage: DependencyScanCoverage | None = None

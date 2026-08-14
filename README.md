@@ -3,11 +3,22 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2.6**: a vulnerability /
-advisory scanner that matches detected dependency versions against OSV.dev.
+actual analysis. This repository is at **Milestone 2.7**: deterministic
+cross-scanner finding correlation.
 
 Runtime testing, network interception, LLM analysis, and the dashboard are
 **not** implemented and are **not faked**.
+
+## Milestone 2.7 — cross-scanner finding correlation
+
+- Detects exact duplicate findings across scanners using structured keys
+- Groups related issues (cleartext + HTTP, inventory + advisory) without
+  hiding distinct vulnerabilities
+- Merges evidence, reconciles severity/confidence, and assigns `CORR-NNN` IDs
+- Correlation is deterministic and does not use AI
+- When evidence is insufficient, findings remain separate
+
+See [docs/milestone-2-7.md](docs/milestone-2-7.md).
 
 ## Milestone 2.6 — vulnerability / advisory scanner
 
@@ -175,5 +186,6 @@ See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/mil
 [docs/milestone-2.md](docs/milestone-2.md), [docs/milestone-2-1.md](docs/milestone-2-1.md),
 [docs/milestone-2-2.md](docs/milestone-2-2.md), [docs/milestone-2-3.md](docs/milestone-2-3.md),
 and [docs/milestone-2-4.md](docs/milestone-2-4.md),
-[docs/milestone-2-5.md](docs/milestone-2-5.md), and
-[docs/milestone-2-6.md](docs/milestone-2-6.md).
+[docs/milestone-2-5.md](docs/milestone-2-5.md),
+[docs/milestone-2-6.md](docs/milestone-2-6.md), and
+[docs/milestone-2-7.md](docs/milestone-2-7.md).

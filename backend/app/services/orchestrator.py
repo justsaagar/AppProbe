@@ -13,7 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from app.analyzers.correlation import correlate_findings
+from app.analyzers.correlation import correlate
 from app.analyzers.findings import normalize_finding
 from app.analyzers.metadata import extract_metadata
 from app.analyzers.severity import overall_risk, severity_counts
@@ -485,20 +485,26 @@ class ScanOrchestrator:
             callback=callback,
             cli_index=10,
         )
-        merged, groups = correlate_findings(job.findings)
-        job.findings = merged
-        job.correlated_groups = groups
+        result = correlate(job.findings)
+        job.raw_findings = result.raw_findings
+        job.findings = result.findings
+        job.correlated_groups = result.groups
+        job.correlation_summary = result.summary
         scan_ws = self.workspace.for_scan(job.id)
         (scan_ws.findings_dir / "findings.json").write_text(
-            json.dumps([item.model_dump(mode="json") for item in merged], indent=2),
+            json.dumps([item.model_dump(mode="json") for item in result.findings], indent=2),
             encoding="utf-8",
         )
         (scan_ws.artifacts / "findings.json").write_text(
-            json.dumps([item.model_dump(mode="json") for item in merged], indent=2),
+            json.dumps([item.model_dump(mode="json") for item in result.findings], indent=2),
             encoding="utf-8",
         )
         (scan_ws.findings_dir / "correlated-groups.json").write_text(
-            json.dumps([item.model_dump(mode="json") for item in groups], indent=2),
+            json.dumps([item.model_dump(mode="json") for item in result.groups], indent=2),
+            encoding="utf-8",
+        )
+        (scan_ws.findings_dir / "correlation-summary.json").write_text(
+            result.summary.model_dump_json(indent=2),
             encoding="utf-8",
         )
         job.stages_completed.append("correlation")
@@ -506,7 +512,11 @@ class ScanOrchestrator:
             CoverageNote(
                 area="finding correlation",
                 executed=True,
-                reason=f"Deterministic merge produced {len(groups)} correlated group(s)",
+                reason=(
+                    "Deterministic correlation executed. "
+                    f"{result.summary.exact_duplicates_merged} duplicate(s) merged, "
+                    f"{result.summary.related_groups} related group(s)."
+                ),
             )
         )
 
