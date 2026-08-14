@@ -12,7 +12,6 @@ from pathlib import Path
 from app.analyzers.findings import normalize_finding
 from app.config import Settings, get_settings
 from app.models.enums import (
-    ArtifactKind,
     FindingCategory,
     Platform,
     Severity,
@@ -104,8 +103,6 @@ class DependencyScanner(Scanner):
         _persist_inventory(context, records, coverage)
 
         findings = [_tech_finding(record) for record in records]
-        if context.job.artifact_kind in {ArtifactKind.APK, ArtifactKind.AAB}:
-            findings.append(_no_cve_notice())
         return findings
 
 
@@ -377,9 +374,8 @@ def _tech_finding(record: TechnologyRecord) -> Finding:
     )
     description = (
         f"{record.name} appears to be embedded in the application. {version_note} "
-        "Security assessment: NOT EVALUATED. "
-        "Dependency detected; vulnerability version verification not available in this milestone. "
-        "Vulnerability database integration is not part of Milestone 2.5. CVEs are not invented."
+        "This inventory record is informational and is not a vulnerability finding. "
+        "Advisory matching is performed separately when package identity and version are known."
     )
     return normalize_finding(
         source=SOURCE,
@@ -396,33 +392,6 @@ def _tech_finding(record: TechnologyRecord) -> Finding:
         evidence=record.evidence,
         affected_component=record.name,
         reproducibility="Static package/native/library signature match.",
-        verification=Verification.INFO,
-    )
-
-
-def _no_cve_notice() -> Finding:
-    return normalize_finding(
-        source=SOURCE,
-        rule_id="sdk_detected",
-        title="Dependency vulnerability assessment: NOT EXECUTED",
-        category=FindingCategory.PROCESS,
-        severity=Severity.INFO,
-        confidence=1.0,
-        description=(
-            "Dependency vulnerability assessment: NOT EXECUTED. "
-            "No vulnerability database is integrated in Milestone 2.5. Detected SDKs are not "
-            "classified as vulnerable merely because they are present or appear old. "
-            "Dependency detected; vulnerability version verification not available in this milestone. "
-            "CVEs are not invented."
-        ),
-        evidence=[
-            Evidence(
-                kind="process",
-                summary="No CVE/advisory database configured",
-            )
-        ],
-        affected_component="dependencies",
-        reproducibility="N/A — pipeline limitation.",
         verification=Verification.INFO,
     )
 

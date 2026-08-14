@@ -1,7 +1,8 @@
 """Scan pipeline orchestrator.
 
-Milestone 2 runs optional static tools (MobSF, JADX, apktool), secret and
-dependency scanners, and deterministic correlation. Runtime/AI remain skipped.
+Milestone 2 runs optional static tools (MobSF, JADX, apktool), secret,
+dependency, and vulnerability scanners, and deterministic correlation.
+Runtime/AI remain skipped.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from app.analyzers.metadata import extract_metadata
 from app.analyzers.severity import overall_risk, severity_counts
 from app.analyzers.validator import ArtifactValidationError, validate_artifact
 from app.config import Settings
+from app.models.advisory import VulnerabilityAssessment
 from app.models.enums import (
     ArtifactKind,
     FindingCategory,
@@ -39,6 +41,7 @@ from app.scanners.tools.apktool import ApktoolTool, apktool_decoded_dir
 from app.scanners.tools.base import ExternalTool, ToolRunResult
 from app.scanners.tools.jadx import JadxTool, jadx_source_dir
 from app.scanners.tools.mobsf import MobsfTool
+from app.scanners.vulnerabilities import VulnerabilityScanner
 from app.storage.job_store import JobStore
 from app.storage.workspace import WorkspaceManager
 
@@ -53,9 +56,11 @@ CLI_STAGES = [
     "Running apktool",
     "Running secret detection",
     "Running dependency analysis",
+    "Running vulnerability assessment",
     "Correlating findings",
     "Generating report",
 ]
+CLI_STAGE_COUNT = len(CLI_STAGES)
 
 
 class ScanCancelled(RuntimeError):
@@ -75,7 +80,12 @@ class ScanOrchestrator:
         self.store = store
         self.workspace = workspace
         self.settings = settings
-        self.scanners = scanners or [ManifestScanner(), SecretScanner(settings), DependencyScanner()]
+        self.scanners = scanners or [
+            ManifestScanner(),
+            SecretScanner(settings),
+            DependencyScanner(),
+            VulnerabilityScanner(settings),
+        ]
         self.reporter = reporter or MarkdownReporter()
         self.tools = tools or {
             "mobsf": MobsfTool(settings),
@@ -106,6 +116,9 @@ class ScanOrchestrator:
             await self._stage_named_scanner(job, extras, "secret-scanner", 7, "Running secret detection", progress)
             await self._stage_named_scanner(
                 job, extras, "dependency-scanner", 8, "Running dependency analysis", progress
+            )
+            await self._stage_named_scanner(
+                job, extras, "vulnerability-scanner", 9, "Running vulnerability assessment", progress
             )
             await self._persist_raw_findings(job)
             await self._stage_correlate(job, progress)
@@ -163,7 +176,7 @@ class ScanOrchestrator:
         await self.store.save(job)
         if callback:
             if cli_index is not None:
-                callback(progress_value, f"[{cli_index}/10] {cli_label or stage}")
+                callback(progress_value, f"[{cli_index}/{CLI_STAGE_COUNT}] {cli_label or stage}")
             else:
                 callback(progress_value, stage)
 
@@ -373,7 +386,7 @@ class ScanOrchestrator:
             elif result.status is ToolStatus.NOT_EXECUTED:
                 label = f"{display_name} - NOT EXECUTED"
             if label and callback:
-                callback(progress_value, f"[{cli_index}/10] {label}")
+                callback(progress_value, f"[{cli_index}/{CLI_STAGE_COUNT}] {label}")
         job.tool_runs.append(result.record())
         job.findings.extend(result.findings)
         if name == "jadx":
@@ -442,6 +455,13 @@ class ScanOrchestrator:
                     f"{scanner_name} completed. Sources: "
                     + ", ".join(job.dependency_scan_coverage.sources)
                 )
+        if scanner_name == "vulnerability-scanner":
+            job.vulnerability_assessment = _assessment_from_extras(extras)
+            if job.vulnerability_assessment is not None:
+                reason = (
+                    f"{scanner_name} {job.vulnerability_assessment.status}. "
+                    f"{job.vulnerability_assessment.reason}".strip()
+                )
         job.coverage.append(CoverageNote(area=scanner_name, executed=executed, reason=reason))
         job.stages_completed.append(scanner_name if executed else f"{scanner_name}_skipped")
         await self.store.save(job)
@@ -463,7 +483,7 @@ class ScanOrchestrator:
             stage="Correlating findings",
             progress_value=80,
             callback=callback,
-            cli_index=9,
+            cli_index=10,
         )
         merged, groups = correlate_findings(job.findings)
         job.findings = merged
@@ -562,7 +582,7 @@ class ScanOrchestrator:
             stage="Generating report",
             progress_value=92,
             callback=callback,
-            cli_index=10,
+            cli_index=11,
         )
         job.overall_risk = overall_risk(job.findings).value
         job.severity_counts = severity_counts(job.findings)
@@ -617,3 +637,17 @@ def _inventory_from_extras(extras: dict[str, Any]) -> list[TechnologyRecord]:
             except Exception:  # noqa: BLE001
                 continue
     return records
+
+
+def _assessment_from_extras(extras: dict[str, Any]) -> VulnerabilityAssessment | None:
+    payload = extras.get("vulnerability_assessment")
+    if payload is None:
+        return None
+    if isinstance(payload, VulnerabilityAssessment):
+        return payload
+    if isinstance(payload, dict):
+        try:
+            return VulnerabilityAssessment.model_validate(payload)
+        except Exception:  # noqa: BLE001
+            return None
+    return None

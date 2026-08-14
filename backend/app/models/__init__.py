@@ -1,3 +1,4 @@
+from app.models.advisory import Advisory, VulnerabilityAssessment
 from app.models.enums import (
     ArtifactKind,
     FindingCategory,
@@ -21,6 +22,7 @@ from app.models.scan_job import (
 from app.models.technology import DependencyScanCoverage, TechnologyRecord
 
 __all__ = [
+    "Advisory",
     "ApplicationMetadata",
     "ArtifactKind",
     "CorrelatedGroup",
@@ -40,4 +42,5 @@ __all__ = [
     "ToolRunRecord",
     "ToolStatus",
     "Verification",
+    "VulnerabilityAssessment",
 ]

@@ -45,6 +45,10 @@ _TITLE_HINTS = (
 def family_of(finding: Finding) -> str:
     if finding.rule_id and finding.rule_id in _FAMILY:
         return _FAMILY[finding.rule_id]
+    if finding.rule_id and (
+        finding.rule_id == "advisory_match" or finding.rule_id.startswith("advisory_match:")
+    ):
+        return "advisory"
     title = finding.title.lower()
     for needle, family in _TITLE_HINTS:
         if needle.lower() in title:
@@ -76,6 +80,8 @@ def fingerprint_for(finding: Finding) -> str:
     elif family == "sdk":
         component = (finding.affected_component or finding.title).lower()
         material = f"sdk|{component}"
+    elif family == "advisory":
+        material = f"advisory|{finding.rule_id}|{(finding.affected_component or '').lower()}"
     elif family == "exported":
         material = f"exported|{(finding.affected_component or '').lower()}"
     else:

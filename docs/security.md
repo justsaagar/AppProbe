@@ -42,6 +42,20 @@ CVE/advisory database integration is intentionally deferred.
 The scanner does not call NVD, OSV, Snyk, or GitHub Advisory. Test fixtures may
 use harmless package names such as `com.stripe.android` without credentials.
 
+## Vulnerability / advisory scanner (Milestone 2.6)
+
+OSV public API access does not require a secret. Do not add API tokens, GitHub
+tokens, or passwords for this scanner.
+
+Vulnerability assessment depends on advisory-provider availability.
+
+A failed advisory lookup does NOT mean that the dependency is safe.
+
+The scanner does not exploit vulnerabilities or validate exploitability.
+
+Queries include only package ecosystem, name, and version. Advisory responses
+are untrusted external data.
+
 ## Historical GitGuardian incidents
 
 GitGuardian reported three findings in commit `9f26f4c` (file

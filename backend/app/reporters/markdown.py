@@ -29,6 +29,7 @@ class MarkdownReporter:
             self._static_coverage(job),
             self._secret_coverage_section(job),
             self._dependency_coverage_section(job),
+            self._vulnerability_assessment_section(job),
             self._testing_coverage(job),
             self._overall_risk(job),
             self._severity_summary(job),
@@ -115,7 +116,7 @@ class MarkdownReporter:
             [
                 "## 3. Scan Environment",
                 "",
-                "- Analyzer: AppProbe Milestone 2 (manifest, secrets, dependencies, optional external tools)",
+                "- Analyzer: AppProbe Milestone 2 (manifest, secrets, dependencies, advisories, optional external tools)",
                 "- Host isolation: per-scan workspace under `workspace/scans/<id>`",
                 "- Runtime: not prepared",
                 "- Network interception: not prepared",
@@ -185,6 +186,145 @@ class MarkdownReporter:
                 lines.append(f"- {source}")
         else:
             lines.append("- none")
+        return "\n".join(lines)
+
+    def _vulnerability_assessment_section(self, job: ScanJob) -> str:
+        assessment = job.vulnerability_assessment
+        lines = ["## Dependency Vulnerability Assessment", ""]
+        if assessment is None:
+            lines.extend(
+                [
+                    "Status: NOT EXECUTED",
+                    "",
+                    "Advisory source:",
+                    "OSV",
+                    "",
+                    "Reason:",
+                    "Vulnerability scanner did not run for this scan.",
+                    "",
+                    "Packages evaluated:",
+                    "0",
+                    "",
+                    "Vulnerability status:",
+                    "NOT DETERMINED",
+                ]
+            )
+            return "\n".join(lines)
+        lines.extend(
+            [
+                f"Status: {assessment.status}",
+                "",
+                "Advisory source:",
+                assessment.advisory_source or "OSV",
+                "",
+            ]
+        )
+        if assessment.reason:
+            lines.extend(["Reason:", assessment.reason, ""])
+        lines.extend(
+            [
+                "Packages evaluated:",
+                str(assessment.packages_evaluated),
+                "",
+            ]
+        )
+        if assessment.status in {"INCOMPLETE", "NOT_AVAILABLE"}:
+            lines.extend(
+                [
+                    "Vulnerability status:",
+                    "NOT DETERMINED",
+                    "",
+                    "A failed advisory lookup does NOT mean that the dependency is safe.",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "Vulnerable packages:",
+                    str(assessment.vulnerable_packages),
+                    "",
+                    "Packages with no matching advisories:",
+                    str(assessment.packages_no_advisories),
+                    "",
+                    "Packages not evaluated:",
+                    str(assessment.packages_not_evaluated),
+                    "",
+                ]
+            )
+        if assessment.skipped:
+            lines.append("Not evaluated:")
+            for item in assessment.skipped[:40]:
+                version = f" ({item.version})" if item.version else ""
+                lines.append(f"- {item.technology}{version}: {item.reason}")
+            lines.append("")
+        vuln_findings = [
+            item
+            for item in job.findings
+            if item.source == "vulnerability-scanner" and item.rule_id and item.rule_id.startswith("advisory_match")
+        ]
+        if vuln_findings:
+            index = 1
+            for finding in vuln_findings:
+                lines.append(self._render_vuln_finding(index, finding))
+                index += 1
+        lines.append("The scanner does not exploit vulnerabilities or validate exploitability.")
+        return "\n".join(lines)
+
+    def _render_vuln_finding(self, index: int, finding: Finding) -> str:
+        data = {}
+        for item in finding.evidence:
+            if item.kind == "advisory" and item.data:
+                data = item.data
+                break
+        package = data.get("package") or finding.affected_component or "unknown"
+        installed = data.get("installed_version") or "unknown"
+        osv_id = data.get("osv_id") or ""
+        cves = data.get("cve") or []
+        if isinstance(cves, str):
+            cves = [cves]
+        ghsas = data.get("ghsa") or []
+        if isinstance(ghsas, str):
+            ghsas = [ghsas]
+        affected = data.get("affected_range") or "unspecified"
+        refs = data.get("references") or []
+        lines = [
+            f"## VULN-{index:03d}: {finding.title}",
+            "",
+            f"Severity: {finding.severity.value}",
+            f"Confidence: {finding.confidence:.2f}",
+            "",
+            "Package:",
+            str(package),
+            "",
+            "Installed version:",
+            str(installed),
+            "",
+            "Advisory:",
+            osv_id or (ghsas[0] if ghsas else "n/a"),
+            "",
+            "CVE:",
+            ", ".join(str(item) for item in cves) if cves else "none listed",
+            "",
+            "Affected range:",
+            str(affected),
+            "",
+            f"Source: {finding.source}",
+            "",
+        ]
+        if finding.evidence:
+            lines.append("Evidence:")
+            for item in finding.evidence:
+                if item.kind in {"advisory", "verification"}:
+                    lines.append(item.summary)
+            lines.append("")
+        if refs:
+            lines.append("References:")
+            for url in refs:
+                lines.append(f"- {url}")
+            lines.append("")
+        if finding.recommendation:
+            lines.extend(["Recommendation:", finding.recommendation, ""])
         return "\n".join(lines)
 
     def _testing_coverage(self, job: ScanJob) -> str:
@@ -395,12 +535,16 @@ class MarkdownReporter:
 
     def _dependencies(self, job: ScanJob) -> str:
         lines = ["## 16. Dependencies", ""]
+        assessment = job.vulnerability_assessment
         lines.append("Dependency vulnerability assessment:")
-        lines.append("NOT EXECUTED")
+        lines.append(assessment.status if assessment is not None else "NOT EXECUTED")
         lines.append("")
+        if assessment is not None and assessment.reason:
+            lines.append(f"Reason: {assessment.reason}")
+            lines.append("")
         lines.append(
-            "CVE/advisory database integration is not part of this milestone. "
-            "A detected dependency is NOT automatically considered vulnerable."
+            "A detected dependency is NOT automatically considered vulnerable. "
+            "See Dependency Vulnerability Assessment for advisory matching results."
         )
         lines.append("")
         sdks = [
@@ -419,8 +563,7 @@ class MarkdownReporter:
         lines.extend(
             [
                 "",
-                "Detected libraries are informational. Vulnerability version verification is not available "
-                "in this milestone. CVEs are not invented.",
+                "Detected libraries are informational until an advisory match confirms an affected version.",
             ]
         )
         return "\n".join(lines)
@@ -475,7 +618,10 @@ class MarkdownReporter:
         if not inventory:
             lines.append("No technology inventory records were produced for this scan.")
             lines.append("")
-            lines.append("Dependency vulnerability assessment: NOT EXECUTED")
+            lines.append(
+                "Dependency vulnerability assessment: "
+                + (job.vulnerability_assessment.status if job.vulnerability_assessment else "NOT EXECUTED")
+            )
             return "\n".join(lines)
         rows = [
             (
@@ -488,12 +634,13 @@ class MarkdownReporter:
             for item in inventory
         ]
         lines.extend(_table(["Technology", "Category", "Version", "Confidence", "Source"], rows))
+        status = job.vulnerability_assessment.status if job.vulnerability_assessment else "NOT EXECUTED"
         lines.extend(
             [
                 "",
-                "Dependency and SDK detection is informational in Milestone 2.5.",
                 "A detected dependency is NOT automatically considered vulnerable.",
-                "Security assessment: NOT EVALUATED. CVE/advisory database integration is intentionally deferred.",
+                f"Dependency vulnerability assessment: {status}",
+                "See Dependency Vulnerability Assessment for advisory matching details.",
             ]
         )
         return "\n".join(lines)
@@ -530,7 +677,6 @@ class MarkdownReporter:
             "This is a Milestone 2 report. The following were **not** performed unless a tool row above says EXECUTED:",
             "",
             "- MobSF / JADX / apktool when those binaries or services are absent",
-            "- Vulnerability (CVE) version matching for detected SDKs",
             "- Android emulator install, launch, UI exploration",
             "- logcat / crash / ANR collection",
             "- Network interception",
@@ -539,6 +685,10 @@ class MarkdownReporter:
             "- bundletool conversion of AAB to APK",
             "",
             "Do not treat skipped areas as passing tests.",
+            "",
+            "Vulnerability assessment depends on advisory-provider availability. "
+            "A failed advisory lookup does NOT mean that the dependency is safe. "
+            "The scanner does not exploit vulnerabilities or validate exploitability.",
         ]
         if job.error:
             lines.extend(["", f"Job error/warning: {job.error}"])
@@ -593,6 +743,18 @@ def _tool_table_rows(job: ScanJob) -> list[tuple[str, ...]]:
             "AppProbe",
         )
     )
+    vuln_status = skipped
+    if android:
+        assessment = job.vulnerability_assessment
+        if assessment is None:
+            vuln_status = ToolStatus.NOT_EXECUTED
+        elif assessment.status == "COMPLETE":
+            vuln_status = executed
+        elif assessment.status == "NOT_AVAILABLE":
+            vuln_status = ToolStatus.NOT_AVAILABLE
+        else:
+            vuln_status = ToolStatus.AVAILABLE_BUT_FAILED
+    rows.append(("Vulnerability / Advisory Scanner", _tool_status_label(vuln_status), "OSV"))
     mobsf = by_name.get("mobsf")
     if mobsf is None:
         rows.append(("MobSF", "NOT AVAILABLE", "-"))

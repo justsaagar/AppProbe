@@ -303,8 +303,8 @@ async def test_no_cve_lookup_language_and_info_severity(tmp_path: Path) -> None:
     )
     assert all(item.severity is Severity.INFO for item in findings)
     assert all(item.verification is Verification.INFO for item in findings)
-    assert any("NOT EXECUTED" in item.title for item in findings)
-    assert any("vulnerability version verification not available" in item.description.lower() for item in findings)
+    assert not any("NOT EXECUTED" in item.title for item in findings)
+    assert all("not a vulnerability finding" in item.description.lower() for item in findings if item.rule_id == "sdk_detected")
     blob = "\n".join(item.title + item.description for item in findings)
     assert "CVE-202" not in blob
 

@@ -3,11 +3,22 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2.5**: a dependency and SDK
-inventory scanner over the raw APK plus optional JADX/apktool output.
+actual analysis. This repository is at **Milestone 2.6**: a vulnerability /
+advisory scanner that matches detected dependency versions against OSV.dev.
 
 Runtime testing, network interception, LLM analysis, and the dashboard are
 **not** implemented and are **not faked**.
+
+## Milestone 2.6 — vulnerability / advisory scanner
+
+- Consumes the Milestone 2.5 technology inventory
+- Maps known technologies to Maven (and, when reliable, Pub) coordinates
+- Queries the official OSV API for known package/version pairs only
+- Creates findings only when the installed version is in an affected range
+- Records COMPLETE / INCOMPLETE / NOT_AVAILABLE — a failed lookup is not “safe”
+- Does **not** exploit vulnerabilities or validate exploitability
+
+See [docs/milestone-2-6.md](docs/milestone-2-6.md).
 
 ## Milestone 2.5 — dependency and SDK scanner
 
@@ -107,16 +118,17 @@ make scan FILE=workspace/samples/vulnerable-demo.apk
 Expected:
 
 ```
-[1/10] Validating artifact
-[2/10] Extracting metadata
-[3/10] Running manifest analysis
-[4/10] MobSF - NOT AVAILABLE
-[5/10] JADX - NOT AVAILABLE
-[6/10] apktool - NOT AVAILABLE
-[7/10] Running secret detection
-[8/10] Running dependency analysis
-[9/10] Correlating findings
-[10/10] Generating report
+[1/11] Validating artifact
+[2/11] Extracting metadata
+[3/11] Running manifest analysis
+[4/11] MobSF - NOT AVAILABLE
+[5/11] JADX - NOT AVAILABLE
+[6/11] apktool - NOT AVAILABLE
+[7/11] Running secret detection
+[8/11] Running dependency analysis
+[9/11] Running vulnerability assessment
+[10/11] Correlating findings
+[11/11] Generating report
 Scan completed.
 Report:
 workspace/reports/<scan-id>/security-report.md
@@ -162,5 +174,6 @@ in an emulator.
 See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/milestone-1.md),
 [docs/milestone-2.md](docs/milestone-2.md), [docs/milestone-2-1.md](docs/milestone-2-1.md),
 [docs/milestone-2-2.md](docs/milestone-2-2.md), [docs/milestone-2-3.md](docs/milestone-2-3.md),
-and [docs/milestone-2-4.md](docs/milestone-2-4.md), and
-[docs/milestone-2-5.md](docs/milestone-2-5.md).
+and [docs/milestone-2-4.md](docs/milestone-2-4.md),
+[docs/milestone-2-5.md](docs/milestone-2-5.md), and
+[docs/milestone-2-6.md](docs/milestone-2-6.md).
