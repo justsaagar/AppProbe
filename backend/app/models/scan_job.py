@@ -15,6 +15,7 @@ from app.models.enums import (
     ToolStatus,
 )
 from app.models.finding import Finding
+from app.models.technology import DependencyScanCoverage, TechnologyRecord
 
 
 def utcnow() -> datetime:
@@ -107,6 +108,8 @@ class ScanJob(BaseModel):
     tool_runs: list[ToolRunRecord] = Field(default_factory=list)
     correlated_groups: list[CorrelatedGroup] = Field(default_factory=list)
     secret_scan_coverage: SecretScanCoverage | None = None
+    technology_inventory: list[TechnologyRecord] = Field(default_factory=list)
+    dependency_scan_coverage: DependencyScanCoverage | None = None
 
     def mark(
         self,

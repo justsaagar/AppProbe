@@ -82,6 +82,17 @@ AI-assisted analysis is not part of this milestone.
 
 See [docs/milestone-2-4.md](milestone-2-4.md).
 
+## Dependency and SDK scanner (Milestone 2.5)
+
+`DependencyScanner` inspects APK entries, bounded DEX strings, and optional
+JADX/apktool trees. It produces a technology inventory plus INFO findings.
+
+Dependency and SDK detection is informational in Milestone 2.5.
+A detected dependency is NOT automatically considered vulnerable.
+CVE/advisory database integration is intentionally deferred.
+
+See [docs/milestone-2-5.md](milestone-2-5.md).
+
 ## Finding model
 
 Normalized `Finding` records include `source`, `sources` (after merge),
@@ -100,3 +111,6 @@ optional CWE/OWASP/MASVS mappings that are only set when known.
 
 Secret scanning in Milestone 2.4 is local and deterministic. It does not
 call provider APIs, does not exploit credentials, and does not use an LLM.
+
+Dependency/SDK detection in Milestone 2.5 is informational. It does not look
+up CVEs and does not treat a detected library as vulnerable.

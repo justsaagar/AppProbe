@@ -29,6 +29,7 @@ from app.models.enums import (
 from app.models.finding import Evidence, Finding
 from app.models.scan_job import CoverageNote, ScanJob, SecretScanCoverage, utcnow
 from app.models.state import transition
+from app.models.technology import DependencyScanCoverage, TechnologyRecord
 from app.reporters.markdown import MarkdownReporter
 from app.scanners.base import ScanContext, Scanner
 from app.scanners.dependencies import DependencyScanner
@@ -433,6 +434,14 @@ class ScanOrchestrator:
                     f"{scanner_name} completed. Sources: "
                     + ", ".join(job.secret_scan_coverage.sources)
                 )
+        if scanner_name == "dependency-scanner":
+            job.technology_inventory = _inventory_from_extras(extras)
+            job.dependency_scan_coverage = _dependency_coverage_from_extras(extras)
+            if executed and job.dependency_scan_coverage and job.dependency_scan_coverage.sources:
+                reason = (
+                    f"{scanner_name} completed. Sources: "
+                    + ", ".join(job.dependency_scan_coverage.sources)
+                )
         job.coverage.append(CoverageNote(area=scanner_name, executed=executed, reason=reason))
         job.stages_completed.append(scanner_name if executed else f"{scanner_name}_skipped")
         await self.store.save(job)
@@ -580,3 +589,31 @@ def _coverage_from_extras(extras: dict[str, Any]) -> SecretScanCoverage | None:
         except Exception:  # noqa: BLE001
             return None
     return None
+
+
+def _dependency_coverage_from_extras(extras: dict[str, Any]) -> DependencyScanCoverage | None:
+    payload = extras.get("dependency_scan_coverage")
+    if payload is None:
+        return None
+    if isinstance(payload, DependencyScanCoverage):
+        return payload
+    if isinstance(payload, dict):
+        try:
+            return DependencyScanCoverage.model_validate(payload)
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def _inventory_from_extras(extras: dict[str, Any]) -> list[TechnologyRecord]:
+    payload = extras.get("technology_inventory") or []
+    records: list[TechnologyRecord] = []
+    for item in payload:
+        if isinstance(item, TechnologyRecord):
+            records.append(item)
+        elif isinstance(item, dict):
+            try:
+                records.append(TechnologyRecord.model_validate(item))
+            except Exception:  # noqa: BLE001
+                continue
+    return records

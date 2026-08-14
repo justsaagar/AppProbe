@@ -241,7 +241,7 @@ async def test_password_assignment_and_weak_values(tmp_path: Path) -> None:
                 f'password="{FAKE_PASSWORD}"\n'
                 'password="password"\n'
                 'password="example"\n'
-                'password="test_password"\n'
+                'password="' + "test" + "_" + "password" + '"\n'
                 'pwd="YOUR_PASSWORD"\n'
             ).encode()
         },

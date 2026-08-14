@@ -28,6 +28,7 @@ class MarkdownReporter:
             self._scan_environment(job),
             self._static_coverage(job),
             self._secret_coverage_section(job),
+            self._dependency_coverage_section(job),
             self._testing_coverage(job),
             self._overall_risk(job),
             self._severity_summary(job),
@@ -163,6 +164,27 @@ class MarkdownReporter:
             lines.extend(["", "Skipped files:"])
             for item in coverage.skipped_files:
                 lines.append(f"- `{item.path}`: {item.reason}")
+        return "\n".join(lines)
+
+    def _dependency_coverage_section(self, job: ScanJob) -> str:
+        coverage = job.dependency_scan_coverage
+        lines = ["## Dependency Scan Coverage", ""]
+        if coverage is None:
+            lines.append("Dependency scanner coverage was not recorded for this scan.")
+            return "\n".join(lines)
+        lines.extend(
+            [
+                f"Technologies detected: {coverage.technologies_detected}",
+                f"Versions identified: {coverage.versions_identified}",
+                f"Versions unknown: {coverage.versions_unknown}",
+                "Sources:",
+            ]
+        )
+        if coverage.sources:
+            for source in coverage.sources:
+                lines.append(f"- {source}")
+        else:
+            lines.append("- none")
         return "\n".join(lines)
 
     def _testing_coverage(self, job: ScanJob) -> str:
@@ -373,23 +395,27 @@ class MarkdownReporter:
 
     def _dependencies(self, job: ScanJob) -> str:
         lines = ["## 16. Dependencies", ""]
+        lines.append("Dependency vulnerability assessment:")
+        lines.append("NOT EXECUTED")
+        lines.append("")
+        lines.append(
+            "CVE/advisory database integration is not part of this milestone. "
+            "A detected dependency is NOT automatically considered vulnerable."
+        )
+        lines.append("")
         sdks = [
             item
             for item in job.findings
             if item.rule_id == "sdk_detected" and item.affected_component not in {None, "dependencies"}
         ]
-        if not sdks:
+        if not sdks and not job.technology_inventory:
             lines.append(
                 "No third-party SDK signatures were detected, or the artifact had no inspectable package paths."
             )
-            lines.append("")
-            lines.append(
-                "Dependency detected; vulnerability version verification not available in this milestone. "
-                "CVEs are not invented."
-            )
             return "\n".join(lines)
         rows = [(item.affected_component or item.title, item.source) for item in sdks]
-        lines.extend(_table(["SDK", "Source"], rows))
+        if rows:
+            lines.extend(_table(["SDK", "Source"], rows))
         lines.extend(
             [
                 "",
@@ -404,22 +430,72 @@ class MarkdownReporter:
         lines = ["## 17. Technology Detection", ""]
         if meta is None:
             lines.append("Not available.")
+        else:
+            lines.append(f"- Platform: {meta.platform.value}")
+            lines.append(f"- Packaging: {meta.artifact_kind.value}")
+            if meta.native_libraries:
+                lines.append(f"- Native libraries ({len(meta.native_libraries)}):")
+                for lib in meta.native_libraries[:50]:
+                    lines.append(f"  - `{lib}`")
+            else:
+                lines.append("- Native libraries: none listed in the archive")
+            jadx = next((run for run in job.tool_runs if run.name == "jadx"), None)
+            if jadx:
+                lines.append(f"- JADX: {_tool_status_label(jadx.status)} ({jadx.reason})")
+                if jadx.output_dir and jadx.status is ToolStatus.AVAILABLE_AND_EXECUTED:
+                    lines.append(f"- JADX output directory: `{jadx.output_dir}`")
+            else:
+                lines.append("- JADX: not executed")
+        lines.extend(["", self._inventory_section(job)])
+        return "\n".join(lines)
+
+    def _inventory_section(self, job: ScanJob) -> str:
+        lines = ["## Technology & Dependency Inventory", ""]
+        inventory = job.technology_inventory
+        coverage = job.dependency_scan_coverage
+        if coverage is not None:
+            lines.extend(
+                [
+                    f"Technologies detected: {coverage.technologies_detected}",
+                    f"Versions identified: {coverage.versions_identified}",
+                    f"Versions unknown: {coverage.versions_unknown}",
+                    "",
+                ]
+            )
+        elif inventory:
+            identified = sum(1 for item in inventory if item.version)
+            lines.extend(
+                [
+                    f"Technologies detected: {len(inventory)}",
+                    f"Versions identified: {identified}",
+                    f"Versions unknown: {len(inventory) - identified}",
+                    "",
+                ]
+            )
+        if not inventory:
+            lines.append("No technology inventory records were produced for this scan.")
+            lines.append("")
+            lines.append("Dependency vulnerability assessment: NOT EXECUTED")
             return "\n".join(lines)
-        lines.append(f"- Platform: {meta.platform.value}")
-        lines.append(f"- Packaging: {meta.artifact_kind.value}")
-        if meta.native_libraries:
-            lines.append(f"- Native libraries ({len(meta.native_libraries)}):")
-            for lib in meta.native_libraries[:50]:
-                lines.append(f"  - `{lib}`")
-        else:
-            lines.append("- Native libraries: none listed in the archive")
-        jadx = next((run for run in job.tool_runs if run.name == "jadx"), None)
-        if jadx:
-            lines.append(f"- JADX: {_tool_status_label(jadx.status)} ({jadx.reason})")
-            if jadx.output_dir and jadx.status is ToolStatus.AVAILABLE_AND_EXECUTED:
-                lines.append(f"- JADX output directory: `{jadx.output_dir}`")
-        else:
-            lines.append("- JADX: not executed")
+        rows = [
+            (
+                item.name,
+                str(item.category),
+                item.version_label,
+                f"{item.confidence:.2f}",
+                item.detection_source,
+            )
+            for item in inventory
+        ]
+        lines.extend(_table(["Technology", "Category", "Version", "Confidence", "Source"], rows))
+        lines.extend(
+            [
+                "",
+                "Dependency and SDK detection is informational in Milestone 2.5.",
+                "A detected dependency is NOT automatically considered vulnerable.",
+                "Security assessment: NOT EVALUATED. CVE/advisory database integration is intentionally deferred.",
+            ]
+        )
         return "\n".join(lines)
 
     def _screenshots(self, _job: ScanJob) -> str:
@@ -512,7 +588,7 @@ def _tool_table_rows(job: ScanJob) -> list[tuple[str, ...]]:
     rows.append(("Secret Scanner", _tool_status_label(secret_status), "AppProbe"))
     rows.append(
         (
-            "Dependency Scanner",
+            "Dependency / SDK Scanner",
             _tool_status_label(executed if android else skipped),
             "AppProbe",
         )
