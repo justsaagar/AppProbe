@@ -12,6 +12,7 @@ backend/app/
   schemas/      API response models
   services/     ScanService + ScanOrchestrator
   scanners/     Manifest, secret, dependency scanners + tools/ adapters
+  tools/        External executable discovery + safe process execution
   analyzers/    AXML parser, validator, metadata, severity, correlation
   reporters/    Markdown report generator
   runners/      RuntimeRunner interface (unused until Milestone 3)
@@ -36,6 +37,16 @@ backend/app/
 
 Raw tool output is stored under `workspace/scans/<id>/tools/` and
 `workspace/scans/<id>/findings/raw-findings.json`.
+
+## External tool execution (Milestone 2.1)
+
+`app.tools` is the reusable process layer: `ToolDefinition`,
+`resolve_executable`, `ExternalToolExecutor`, and `ToolExecutionResult`.
+
+Statuses: `AVAILABLE`, `NOT_AVAILABLE`, `EXECUTED`, `FAILED`, `TIMEOUT`.
+
+External tool execution infrastructure is implemented. Specific tool adapters
+are not part of Milestone 2.1. See [docs/milestone-2-1.md](milestone-2-1.md).
 
 ## Finding model
 

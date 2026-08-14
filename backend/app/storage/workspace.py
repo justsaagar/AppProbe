@@ -38,6 +38,12 @@ class ScanWorkspace:
     def path(self, *parts: str) -> Path:
         return safe_join(self.root, *parts)
 
+    def tool_dir(self, name: str) -> Path:
+        """Isolated output directory for one external tool within this scan."""
+        path = safe_join(self.tools, name)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
 
 class WorkspaceManager:
     def __init__(self, base: Path) -> None:

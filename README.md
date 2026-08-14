@@ -3,20 +3,26 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2**: modular static analysis
-(manifest, optional MobSF/JADX/apktool, secrets, dependencies, correlation).
+actual analysis. This repository is at **Milestone 2.1**: reusable external
+tool execution infrastructure. Specific JADX / apktool / MobSF adapters are
+not part of this milestone.
 
 Runtime testing, network interception, LLM analysis, and the dashboard are
 **not** implemented and are **not faked**.
 
-## Milestone 2 capabilities
+## Milestone 2.1 — external tool execution
 
-- Everything in Milestone 1 (upload, validation, AXML metadata, manifest findings)
-- Optional MobSF / JADX / apktool adapters with honest NOT_AVAILABLE status
-- Deterministic secret detection with redaction
-- SDK/dependency detection (no invented CVEs)
-- Finding correlation that preserves scanner sources
-- `workspace/reports/<scan-id>/security-report.md` with a tools coverage table
+- Safe executable discovery (`shutil.which`, configurable names, no hardcoded `/usr/bin`)
+- Structured results: `AVAILABLE` / `NOT_AVAILABLE` / `EXECUTED` / `FAILED` / `TIMEOUT`
+- Timeouts, stdout/stderr size limits, workspace-local working directories
+- Argument arrays only (`shell=True` is never used)
+
+See [docs/milestone-2-1.md](docs/milestone-2-1.md).
+
+## Earlier capabilities
+
+- Milestone 1: upload, validation, AXML metadata, manifest findings, `security-report.md`
+- Optional scan-level tool coverage records when a binary is absent (`NOT_AVAILABLE`)
 
 AAB files are inspected as bundles. They are **not** silently treated as
 installable APKs. iOS IPA files are accepted and validated; dynamic iOS testing
@@ -113,4 +119,4 @@ in an emulator.
 ## Layout
 
 See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/milestone-1.md),
-and [docs/milestone-2.md](docs/milestone-2.md).
+[docs/milestone-2.md](docs/milestone-2.md), and [docs/milestone-2-1.md](docs/milestone-2-1.md).

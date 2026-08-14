@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     subprocess_timeout_seconds: int = 60
     scan_stage_timeout_seconds: int = 300
     tool_timeout_seconds: int = 180
+    tool_max_output_bytes: int = 1_048_576
     max_secret_file_bytes: int = 2 * 1024 * 1024
     max_secret_scan_files: int = 4000
 

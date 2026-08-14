@@ -1,14 +1,18 @@
-"""Safe subprocess invocation. Never uses shell interpolation."""
+"""Safe subprocess invocation. Never uses shell interpolation.
+
+Process spawning lives in ``app.tools.executor``. This module keeps the
+historical ``run_command`` helpers used by existing scanners.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from app.models.enums import ToolExecutionStatus
+from app.tools.definition import ToolDefinition
+from app.tools.executor import ExternalToolExecutor, merge_env
 
 
 class SubprocessError(RuntimeError):
@@ -24,31 +28,6 @@ class SubprocessResult:
     returncode: int
     stdout: str
     stderr: str
-
-
-_ALLOWED_ENV = {
-    "PATH",
-    "HOME",
-    "LANG",
-    "LC_ALL",
-    "LC_CTYPE",
-    "TERM",
-    "TMPDIR",
-    "TMP",
-    "TEMP",
-    "USER",
-    "LOGNAME",
-    "ANDROID_SDK_ROOT",
-    "ANDROID_HOME",
-    "JAVA_HOME",
-}
-
-
-def _sanitize_env(extra: dict[str, str] | None = None) -> dict[str, str]:
-    env = {key: value for key, value in os.environ.items() if key in _ALLOWED_ENV}
-    if extra:
-        env.update(extra)
-    return env
 
 
 async def run_command(
@@ -68,42 +47,36 @@ async def run_command(
     if any("\x00" in arg for arg in args):
         raise SubprocessError("NUL byte in command argument")
 
-    logger.debug("running command args=%s cwd=%s", args, cwd)
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *args,
-            stdin=asyncio.subprocess.PIPE if input_bytes is not None else asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(cwd) if cwd else None,
-            env=_sanitize_env(extra_env),
-        )
-    except FileNotFoundError as exc:
-        raise SubprocessError(f"executable not found: {args[0]}") from exc
-
-    try:
-        stdout_b, stderr_b = await asyncio.wait_for(
-            process.communicate(input=input_bytes),
-            timeout=timeout,
-        )
-    except TimeoutError as exc:
-        process.kill()
-        await process.wait()
+    definition = ToolDefinition(name=Path(args[0]).name, executable=args[0])
+    executed = await ExternalToolExecutor().run(
+        definition,
+        list(args[1:]),
+        cwd=cwd,
+        timeout=timeout,
+        env=extra_env,
+        input_bytes=input_bytes,
+    )
+    if executed.status is ToolExecutionStatus.NOT_AVAILABLE:
+        raise SubprocessError(executed.error or f"executable not found: {args[0]}")
+    if executed.status is ToolExecutionStatus.TIMEOUT:
         raise SubprocessError(
-            f"command timed out after {timeout}s: {args[0]}",
-            returncode=None,
-        ) from exc
-
-    stdout = stdout_b.decode("utf-8", errors="replace")
-    stderr = stderr_b.decode("utf-8", errors="replace")
-    returncode = process.returncode or 0
-    if check and returncode != 0:
+            executed.error or f"command timed out after {timeout}s: {args[0]}",
+            returncode=executed.exit_code,
+            stderr=executed.stderr,
+        )
+    returncode = executed.exit_code if executed.exit_code is not None else 1
+    if check and executed.status is not ToolExecutionStatus.EXECUTED:
         raise SubprocessError(
-            f"command failed ({returncode}): {args[0]}",
+            executed.error or f"command failed ({returncode}): {args[0]}",
             returncode=returncode,
-            stderr=stderr,
+            stderr=executed.stderr,
         )
-    return SubprocessResult(args=list(args), returncode=returncode, stdout=stdout, stderr=stderr)
+    return SubprocessResult(
+        args=list(args),
+        returncode=returncode,
+        stdout=executed.stdout,
+        stderr=executed.stderr,
+    )
 
 
 def run_command_sync(
@@ -118,3 +91,12 @@ def run_command_sync(
     return asyncio.run(
         run_command(args, timeout=timeout, cwd=cwd, extra_env=extra_env, check=check)
     )
+
+
+__all__ = [
+    "SubprocessError",
+    "SubprocessResult",
+    "merge_env",
+    "run_command",
+    "run_command_sync",
+]
