@@ -45,8 +45,17 @@ Raw tool output is stored under `workspace/scans/<id>/tools/` and
 
 Statuses: `AVAILABLE`, `NOT_AVAILABLE`, `EXECUTED`, `FAILED`, `TIMEOUT`.
 
-External tool execution infrastructure is implemented. Specific tool adapters
-are not part of Milestone 2.1. See [docs/milestone-2-1.md](milestone-2-1.md).
+External tool execution infrastructure is implemented. See
+[docs/milestone-2-1.md](milestone-2-1.md).
+
+## JADX adapter (Milestone 2.2)
+
+`JadxTool` uses `ToolDefinition` + `ExternalToolExecutor`. It decompiles APKs
+into `workspace/scans/<id>/tools/jadx/output/`.
+
+JADX output is generated for downstream analysis. No security findings are
+generated directly by the JADX adapter. See
+[docs/milestone-2-2.md](milestone-2-2.md).
 
 ## Finding model
 

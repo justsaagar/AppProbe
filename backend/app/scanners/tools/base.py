@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.models.enums import ToolStatus
+from app.models.enums import ToolExecutionStatus, ToolStatus
 from app.models.finding import Finding
 from app.models.scan_job import ToolRunRecord
 from app.scanners.base import ScanContext
@@ -34,6 +34,11 @@ class ToolRunResult:
     output_dir: Path | None = None
     findings: list[Finding] = field(default_factory=list)
     extras: dict[str, Any] = field(default_factory=dict)
+    execution_status: ToolExecutionStatus | None = None
+    exit_code: int | None = None
+    duration_seconds: float | None = None
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
 
     def record(self) -> ToolRunRecord:
         return ToolRunRecord(
@@ -42,6 +47,11 @@ class ToolRunResult:
             version=self.version,
             reason=self.reason,
             output_dir=str(self.output_dir) if self.output_dir else None,
+            execution_status=self.execution_status,
+            exit_code=self.exit_code,
+            duration_seconds=self.duration_seconds,
+            stdout_truncated=self.stdout_truncated,
+            stderr_truncated=self.stderr_truncated,
         )
 
 

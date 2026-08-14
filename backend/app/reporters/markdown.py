@@ -125,7 +125,7 @@ class MarkdownReporter:
         lines = [
             "## Static Analysis Coverage",
             "",
-            "### Tools",
+            "### Static Analysis Tools",
             "",
         ]
         rows = _tool_table_rows(job)
@@ -133,7 +133,7 @@ class MarkdownReporter:
         lines.extend(
             [
                 "",
-                "Statuses: AVAILABLE_AND_EXECUTED, AVAILABLE_BUT_FAILED, NOT_AVAILABLE, NOT_EXECUTED.",
+                "Statuses: EXECUTED, FAILED, TIMEOUT, NOT AVAILABLE, NOT EXECUTED.",
                 "Absence of a tool is not a passing test.",
             ]
         )
@@ -347,11 +347,12 @@ class MarkdownReporter:
         else:
             lines.append("- Native libraries: none listed in the archive")
         jadx = next((run for run in job.tool_runs if run.name == "jadx"), None)
-        if jadx and jadx.status is ToolStatus.AVAILABLE_AND_EXECUTED:
-            lines.append(f"- JADX: EXECUTED ({jadx.reason})")
+        if jadx:
+            lines.append(f"- JADX: {_tool_status_label(jadx.status)} ({jadx.reason})")
+            if jadx.output_dir and jadx.status is ToolStatus.AVAILABLE_AND_EXECUTED:
+                lines.append(f"- JADX output directory: `{jadx.output_dir}`")
         else:
-            reason = jadx.reason if jadx else "JADX not run"
-            lines.append(f"- JADX: not executed ({reason})")
+            lines.append("- JADX: not executed")
         return "\n".join(lines)
 
     def _screenshots(self, _job: ScanJob) -> str:
@@ -440,15 +441,26 @@ def _tool_table_rows(job: ScanJob) -> list[tuple[str, ...]]:
             ("Dependency Scanner", ToolStatus.NOT_EXECUTED, "AppProbe"),
         ]
     rows: list[tuple[str, ...]] = [
-        (name, status.value, version) for name, status, version in builtin
+        (name, _tool_status_label(status), version) for name, status, version in builtin
     ]
     for label, key in (("MobSF", "mobsf"), ("JADX", "jadx"), ("apktool", "apktool")):
         run = by_name.get(key)
         if run is None:
-            rows.append((label, ToolStatus.NOT_AVAILABLE.value, "-"))
+            rows.append((label, "NOT AVAILABLE", "-"))
         else:
-            rows.append((label, run.status.value, run.version or "-"))
+            rows.append((label, _tool_status_label(run.status), run.version or "-"))
     return rows
+
+
+def _tool_status_label(status: ToolStatus) -> str:
+    labels = {
+        ToolStatus.AVAILABLE_AND_EXECUTED: "EXECUTED",
+        ToolStatus.AVAILABLE_BUT_FAILED: "FAILED",
+        ToolStatus.NOT_AVAILABLE: "NOT AVAILABLE",
+        ToolStatus.NOT_EXECUTED: "NOT EXECUTED",
+        ToolStatus.TIMEOUT: "TIMEOUT",
+    }
+    return labels.get(status, status.value)
 
 
 def _json(value: object) -> str:

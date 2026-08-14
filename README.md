@@ -3,12 +3,21 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2.1**: reusable external
-tool execution infrastructure. Specific JADX / apktool / MobSF adapters are
-not part of this milestone.
+actual analysis. This repository is at **Milestone 2.2**: JADX decompilation
+adapter on the reusable external-tool executor.
 
 Runtime testing, network interception, LLM analysis, and the dashboard are
 **not** implemented and are **not faked**.
+
+## Milestone 2.2 — JADX adapter
+
+- Detects `jadx` / `jadx-cli` (or `JADX_BIN`) without hardcoded `/usr/bin` paths
+- Runs through `ExternalToolExecutor` with timeouts and isolated output
+- Writes decompiled output to `workspace/scans/<scan-id>/tools/jadx/output/`
+- Records EXECUTED / NOT AVAILABLE / FAILED / TIMEOUT / NOT EXECUTED in the report
+- Does **not** emit security findings (downstream scanners will consume the output)
+
+See [docs/milestone-2-2.md](docs/milestone-2-2.md).
 
 ## Milestone 2.1 — external tool execution
 
@@ -119,4 +128,5 @@ in an emulator.
 ## Layout
 
 See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/milestone-1.md),
-[docs/milestone-2.md](docs/milestone-2.md), and [docs/milestone-2-1.md](docs/milestone-2-1.md).
+[docs/milestone-2.md](docs/milestone-2.md), [docs/milestone-2-1.md](docs/milestone-2-1.md),
+and [docs/milestone-2-2.md](docs/milestone-2-2.md).
