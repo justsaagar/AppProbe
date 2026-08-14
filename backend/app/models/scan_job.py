@@ -27,6 +27,21 @@ class CoverageNote(BaseModel):
     reason: str
 
 
+class SkippedScanFile(BaseModel):
+    path: str
+    reason: str
+
+
+class SecretScanCoverage(BaseModel):
+    """Local secret-scanner coverage. Values are measured, never fabricated."""
+
+    files_scanned: int = 0
+    files_skipped: int = 0
+    bytes_scanned: int = 0
+    sources: list[str] = Field(default_factory=list)
+    skipped_files: list[SkippedScanFile] = Field(default_factory=list)
+
+
 class ToolRunRecord(BaseModel):
     name: str
     status: ToolStatus = ToolStatus.NOT_EXECUTED
@@ -91,6 +106,7 @@ class ScanJob(BaseModel):
     severity_counts: dict[str, int] = Field(default_factory=dict)
     tool_runs: list[ToolRunRecord] = Field(default_factory=list)
     correlated_groups: list[CorrelatedGroup] = Field(default_factory=list)
+    secret_scan_coverage: SecretScanCoverage | None = None
 
     def mark(
         self,

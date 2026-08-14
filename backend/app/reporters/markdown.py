@@ -27,6 +27,7 @@ class MarkdownReporter:
             self._application_information(job),
             self._scan_environment(job),
             self._static_coverage(job),
+            self._secret_coverage_section(job),
             self._testing_coverage(job),
             self._overall_risk(job),
             self._severity_summary(job),
@@ -139,6 +140,31 @@ class MarkdownReporter:
         )
         return "\n".join(lines)
 
+    def _secret_coverage_section(self, job: ScanJob) -> str:
+        coverage = job.secret_scan_coverage
+        lines = ["## Secret Scan Coverage", ""]
+        if coverage is None:
+            lines.append("Secret scanner coverage was not recorded for this scan.")
+            return "\n".join(lines)
+        lines.extend(
+            [
+                f"Files scanned: {coverage.files_scanned}",
+                f"Files skipped: {coverage.files_skipped}",
+                f"Bytes scanned: {_format_bytes(coverage.bytes_scanned)}",
+                "Sources:",
+            ]
+        )
+        if coverage.sources:
+            for source in coverage.sources:
+                lines.append(f"- {source}")
+        else:
+            lines.append("- none")
+        if coverage.skipped_files:
+            lines.extend(["", "Skipped files:"])
+            for item in coverage.skipped_files:
+                lines.append(f"- `{item.path}`: {item.reason}")
+        return "\n".join(lines)
+
     def _testing_coverage(self, job: ScanJob) -> str:
         lines = ["## 4. Testing Coverage", ""]
         executed = [note for note in job.coverage if note.executed]
@@ -246,9 +272,50 @@ class MarkdownReporter:
         if not secrets:
             lines.append("No secret-scanner findings were reported.")
             return "\n".join(lines)
-        for finding in secrets:
-            lines.append(self._render_finding(finding))
+        index = 1
+        for severity in SEVERITY_ORDER:
+            group = [item for item in secrets if item.severity is severity]
+            if not group:
+                continue
+            lines.append(f"### {severity.value}")
+            lines.append("")
+            for finding in group:
+                display_id = f"SEC-SECRET-{index:03d}"
+                index += 1
+                lines.append(self._render_secret_finding(display_id, finding))
         lines.append("Complete credentials are never written to this report.")
+        return "\n".join(lines)
+
+    def _render_secret_finding(self, display_id: str, finding: Finding) -> str:
+        evidence = finding.evidence[0] if finding.evidence else None
+        location = evidence.location if evidence else finding.affected_component or "n/a"
+        source = ""
+        if evidence and evidence.data.get("source"):
+            source = str(evidence.data["source"])
+        elif finding.source:
+            source = finding.source
+        summary = evidence.summary if evidence else ""
+        lines = [
+            f"## {display_id}: {finding.title}",
+            "",
+            f"ID: `{finding.id}`",
+            f"Severity: {finding.severity.value}",
+            f"Confidence: {finding.confidence:.2f}",
+            f"Classification: {finding.verification.value}",
+            "",
+            "Source:",
+            source or finding.source,
+            "",
+            "Location:",
+            f"`{location}`",
+            "",
+        ]
+        if summary:
+            lines.extend(["Evidence:", summary, ""])
+        if finding.impact:
+            lines.extend(["Impact:", finding.impact, ""])
+        if finding.recommendation:
+            lines.extend(["Recommendation:", finding.recommendation, ""])
         return "\n".join(lines)
 
     def _correlated_section(self, job: ScanJob) -> str:
@@ -429,26 +496,32 @@ def _table(headers: list[str], rows: list[tuple[str, ...]]) -> list[str]:
 
 def _tool_table_rows(job: ScanJob) -> list[tuple[str, ...]]:
     by_name = {run.name: run for run in job.tool_runs}
-    builtin = [
-        ("Manifest Scanner", ToolStatus.AVAILABLE_AND_EXECUTED, "AppProbe"),
-        ("Secret Scanner", ToolStatus.AVAILABLE_AND_EXECUTED, "AppProbe"),
-        ("Dependency Scanner", ToolStatus.AVAILABLE_AND_EXECUTED, "AppProbe"),
-    ]
-    if job.platform.value == "ios":
-        builtin = [
-            ("Manifest Scanner", ToolStatus.NOT_EXECUTED, "AppProbe"),
-            ("Secret Scanner", ToolStatus.NOT_EXECUTED, "AppProbe"),
-            ("Dependency Scanner", ToolStatus.NOT_EXECUTED, "AppProbe"),
-        ]
+    executed = ToolStatus.AVAILABLE_AND_EXECUTED
+    skipped = ToolStatus.NOT_EXECUTED
+    android = job.platform.value != "ios"
+    secret_status = executed if android else skipped
     rows: list[tuple[str, ...]] = [
-        (name, _tool_status_label(status), version) for name, status, version in builtin
+        ("Manifest Scanner", _tool_status_label(executed if android else skipped), "AppProbe"),
     ]
-    for label, key in (("MobSF", "mobsf"), ("JADX", "jadx"), ("apktool", "apktool")):
+    for label, key in (("JADX", "jadx"), ("apktool", "apktool")):
         run = by_name.get(key)
         if run is None:
             rows.append((label, "NOT AVAILABLE", "-"))
         else:
             rows.append((label, _tool_status_label(run.status), run.version or "-"))
+    rows.append(("Secret Scanner", _tool_status_label(secret_status), "AppProbe"))
+    rows.append(
+        (
+            "Dependency Scanner",
+            _tool_status_label(executed if android else skipped),
+            "AppProbe",
+        )
+    )
+    mobsf = by_name.get("mobsf")
+    if mobsf is None:
+        rows.append(("MobSF", "NOT AVAILABLE", "-"))
+    else:
+        rows.append(("MobSF", _tool_status_label(mobsf.status), mobsf.version or "-"))
     return rows
 
 
@@ -467,3 +540,11 @@ def _json(value: object) -> str:
     import json
 
     return json.dumps(value, indent=2, default=str)
+
+
+def _format_bytes(count: int) -> str:
+    if count >= 1024 * 1024:
+        return f"{count / (1024 * 1024):.1f} MB"
+    if count >= 1024:
+        return f"{count / 1024:.1f} KB"
+    return f"{count} bytes"

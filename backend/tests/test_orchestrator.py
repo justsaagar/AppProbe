@@ -65,6 +65,10 @@ async def test_apk_scan_produces_findings_and_report(harness, tmp_path: Path) ->
         "NOT_EXECUTED",
     }
     assert "Static Analysis Coverage" in report
+    assert "Secret Scan Coverage" in report
+    assert "Secret Scanner" in report
+    assert result.secret_scan_coverage is not None
+    assert "raw APK" in result.secret_scan_coverage.sources
     assert "MobSF" in report
     assert "| JADX |" in report
     assert any(note.area == "finding correlation" and note.executed for note in result.coverage)

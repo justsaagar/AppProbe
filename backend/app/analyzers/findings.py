@@ -41,6 +41,7 @@ CWE = {
     "hardcoded_secret": "CWE-798",
     "private_key": "CWE-321",
     "jwt": "CWE-798",
+    "cloud_credential": "CWE-798",
     "http_endpoint": "CWE-319",
     "weak_crypto": "CWE-327",
 }
