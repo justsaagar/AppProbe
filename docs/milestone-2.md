@@ -7,9 +7,10 @@ platform without pretending optional tools ran.
 
 ## Added
 
-- External tool adapters: MobSF (REST or `mobsfscan` CLI), JADX, apktool
+- External tool adapters: JADX, apktool, optional MobSF REST
 - Availability detection and structured statuses:
-  `AVAILABLE_AND_EXECUTED`, `AVAILABLE_BUT_FAILED`, `NOT_AVAILABLE`, `NOT_EXECUTED`
+  `AVAILABLE_AND_EXECUTED`, `AVAILABLE_BUT_FAILED`, `NOT_AVAILABLE`,
+  `NOT_EXECUTED`, `TIMEOUT`, `NOT_ENABLED`, `AUTH_FAILED`
 - Deterministic secret detector with redaction and false-positive guards
 - SDK/dependency detector (informational inventory)
 - Vulnerability / advisory matching via OSV (affected versions only)
@@ -41,12 +42,22 @@ Override with `APKTOOL_BIN=/path/to/apktool`. Requires Java.
 
 ### MobSF
 
-Either:
+MobSF is an optional static-analysis provider. Leave it disabled unless a
+**local** MobSF instance is running.
 
-- REST: set `MOBSF_URL=http://127.0.0.1:8000` and optional `MOBSF_API_KEY`
-- CLI: install `mobsfscan` on `PATH`
+```bash
+MOBSF_ENABLED=true
+MOBSF_URL=http://127.0.0.1:8000
+MOBSF_API_KEY=
+```
 
-If neither is present, the report records **MobSF: NOT_AVAILABLE** and the scan continues.
+If `MOBSF_ENABLED=false`, the report records **MobSF: NOT ENABLED** and the
+scan continues. If enabled but unreachable, the report records
+**MobSF: NOT AVAILABLE**. Authentication failure is **AUTH FAILED**.
+
+See [docs/milestone-2-8.md](milestone-2-8.md).
+
+Dynamic analysis is NOT part of Milestone 2.8.
 
 ## What is still not implemented
 

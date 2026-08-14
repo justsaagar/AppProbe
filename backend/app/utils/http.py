@@ -42,12 +42,16 @@ class JsonHttpClient:
         retry_transient: int = 1,
         transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None = None,
         headers: dict[str, str] | None = None,
+        follow_redirects: bool = True,
+        allow_empty: bool = False,
     ) -> None:
         self.timeout = httpx.Timeout(timeout_seconds, connect=connect_timeout_seconds)
         self.max_response_bytes = max_response_bytes
         self.retry_transient = max(0, min(retry_transient, 2))
         self.transport = transport
         self.headers = headers or {"Accept": "application/json"}
+        self.follow_redirects = follow_redirects
+        self.allow_empty = allow_empty
 
     async def post_json(self, url: str, payload: dict[str, Any]) -> Any:
         return await self._request("POST", url, payload=payload)
@@ -55,26 +59,53 @@ class JsonHttpClient:
     async def get_json(self, url: str) -> Any:
         return await self._request("GET", url)
 
-    async def _request(self, method: str, url: str, payload: dict[str, Any] | None = None) -> Any:
+    async def post_form(self, url: str, data: dict[str, str]) -> Any:
+        return await self._request("POST", url, form=data)
+
+    async def post_multipart(
+        self,
+        url: str,
+        *,
+        files: dict[str, Any],
+        data: dict[str, str] | None = None,
+    ) -> Any:
+        return await self._request("POST", url, form=data, files=files)
+
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        payload: dict[str, Any] | None = None,
+        form: dict[str, str] | None = None,
+        files: dict[str, Any] | None = None,
+    ) -> Any:
         attempts = 1 + self.retry_transient
         last_error: JsonHttpError | None = None
         for attempt in range(attempts):
             try:
-                return await self._once(method, url, payload)
+                return await self._once(method, url, payload=payload, form=form, files=files)
             except JsonHttpError as exc:
                 last_error = exc
                 retryable = exc.kind == "http_error" and exc.status_code in TRANSIENT_STATUS
                 if not retryable or attempt >= attempts - 1:
                     raise
-                logger.info("retrying %s %s after %s", method, url, exc.status_code)
+                logger.info("retrying %s after %s", method, exc.status_code)
         assert last_error is not None
         raise last_error
 
-    async def _once(self, method: str, url: str, payload: dict[str, Any] | None) -> Any:
+    async def _once(
+        self,
+        method: str,
+        url: str,
+        *,
+        payload: dict[str, Any] | None,
+        form: dict[str, str] | None = None,
+        files: dict[str, Any] | None = None,
+    ) -> Any:
         kwargs: dict[str, Any] = {
             "timeout": self.timeout,
             "headers": self.headers,
-            "follow_redirects": True,
+            "follow_redirects": self.follow_redirects,
         }
         if self.transport is not None:
             kwargs["transport"] = self.transport
@@ -83,32 +114,52 @@ class JsonHttpClient:
                 request_kwargs: dict[str, Any] = {}
                 if payload is not None:
                     request_kwargs["json"] = payload
+                elif files is not None:
+                    request_kwargs["files"] = files
+                    if form:
+                        request_kwargs["data"] = form
+                elif form is not None:
+                    request_kwargs["data"] = form
                 response = await client.request(method, url, **request_kwargs)
                 body = await _read_limited(response, self.max_response_bytes)
         except httpx.TimeoutException as exc:
-            raise JsonHttpError("timeout", f"HTTP timeout contacting {url}: {exc}") from exc
+            raise JsonHttpError("timeout", f"HTTP timeout contacting configured endpoint: {exc}") from exc
         except httpx.HTTPError as exc:
-            raise JsonHttpError("unavailable", f"HTTP connection failed for {url}: {exc}") from exc
+            raise JsonHttpError("unavailable", f"HTTP connection failed: {exc}") from exc
 
         status = response.status_code
+        if not self.follow_redirects and 300 <= status < 400:
+            raise JsonHttpError(
+                "http_error",
+                "HTTP redirect from configured endpoint was not followed",
+                status_code=status,
+            )
+        if status in {401, 403}:
+            raise JsonHttpError(
+                "auth_failed",
+                f"HTTP {status} from configured endpoint",
+                status_code=status,
+            )
         if status == 429:
             raise JsonHttpError(
                 "rate_limited",
-                f"HTTP 429 rate limited by {url}",
+                "HTTP 429 rate limited by configured endpoint",
                 status_code=429,
             )
         if status >= 500:
             raise JsonHttpError(
                 "http_error",
-                f"HTTP {status} from {url}",
+                f"HTTP {status} from configured endpoint",
                 status_code=status,
             )
         if status >= 400:
             raise JsonHttpError(
                 "http_error",
-                f"HTTP {status} from {url}",
+                f"HTTP {status} from configured endpoint",
                 status_code=status,
             )
+        if not body and self.allow_empty:
+            return {}
         return _parse_json(body, url)
 
 

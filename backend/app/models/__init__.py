@@ -11,6 +11,7 @@ from app.models.enums import (
     Verification,
 )
 from app.models.finding import Evidence, Finding
+from app.models.mobsf import MobSFAnalysis, MobSFAvailability, MobSFResult
 from app.models.scan_job import (
     ApplicationMetadata,
     CorrelatedGroup,
@@ -34,6 +35,9 @@ __all__ = [
     "Evidence",
     "Finding",
     "FindingCategory",
+    "MobSFAnalysis",
+    "MobSFAvailability",
+    "MobSFResult",
     "Platform",
     "RelationshipType",
     "ScanJob",

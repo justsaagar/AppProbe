@@ -70,6 +70,9 @@ def normalize_finding(
     reproducibility: str = "",
     potential: bool = False,
     verification: Verification | None = None,
+    cwe: str | None = None,
+    owasp: str | None = None,
+    masvs: str | None = None,
 ) -> Finding:
     if verification is None:
         if potential:
@@ -91,9 +94,9 @@ def normalize_finding(
         impact=impact,
         recommendation=recommendation,
         evidence=evidence or [],
-        cwe=CWE.get(rule_id),
-        owasp=OWASP_MOBILE.get(rule_id),
-        masvs=MASVS.get(rule_id),
+        cwe=cwe or CWE.get(rule_id),
+        owasp=owasp or OWASP_MOBILE.get(rule_id),
+        masvs=masvs or MASVS.get(rule_id),
         reproducibility=reproducibility,
         affected_component=affected_component,
         potential=potential or verification is Verification.POTENTIAL,

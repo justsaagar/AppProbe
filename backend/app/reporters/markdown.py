@@ -30,6 +30,7 @@ class MarkdownReporter:
             self._secret_coverage_section(job),
             self._dependency_coverage_section(job),
             self._vulnerability_assessment_section(job),
+            self._mobsf_analysis_section(job),
             self._testing_coverage(job),
             self._overall_risk(job),
             self._severity_summary(job),
@@ -81,7 +82,8 @@ class MarkdownReporter:
             "",
             "This report is produced by deterministic scanners. "
             "No LLM, emulator, or network interceptor was invoked. "
-            "Optional tools (MobSF, JADX, apktool) are listed below only when they actually ran.",
+            "Optional tools (MobSF, JADX, apktool) are listed below only when they actually ran. "
+            "MobSF is an optional static-analysis provider and does not replace AppProbe scanners.",
         ]
         return "\n".join(lines)
 
@@ -137,7 +139,7 @@ class MarkdownReporter:
         lines.extend(
             [
                 "",
-                "Statuses: EXECUTED, FAILED, TIMEOUT, NOT AVAILABLE, NOT EXECUTED.",
+                "Statuses: EXECUTED, FAILED, TIMEOUT, NOT AVAILABLE, NOT ENABLED, AUTH FAILED, NOT EXECUTED.",
                 "Absence of a tool is not a passing test.",
             ]
         )
@@ -326,6 +328,51 @@ class MarkdownReporter:
             lines.append("")
         if finding.recommendation:
             lines.extend(["Recommendation:", finding.recommendation, ""])
+        return "\n".join(lines)
+
+    def _mobsf_analysis_section(self, job: ScanJob) -> str:
+        analysis = job.mobsf_analysis
+        by_name = {run.name: run for run in job.tool_runs}
+        run = by_name.get("mobsf")
+        status = analysis.status if analysis is not None else (
+            _tool_status_label(run.status) if run is not None else "NOT ENABLED"
+        )
+        version = (analysis.version if analysis is not None else None) or (
+            run.version if run is not None else None
+        ) or "Unknown"
+        imported = analysis.findings_imported if analysis is not None else 0
+        correlated = sum(1 for item in job.findings if "mobsf" in (item.sources or [item.source]))
+        duration = analysis.duration_seconds if analysis is not None else (run.duration_seconds if run is not None else None)
+        availability = analysis.availability if analysis is not None else status
+        reason = analysis.reason if analysis is not None else (run.reason if run is not None else "MobSF did not run.")
+        lines = [
+            "## MobSF Analysis",
+            "",
+            f"Status: {status}",
+            f"Version: {version}",
+            f"Findings imported: {imported}",
+            f"Correlated findings: {correlated}",
+            f"Scan duration: {_format_duration(duration)}",
+            f"Availability: {availability}",
+            "",
+            "Reason:",
+            reason,
+            "",
+            "Limitations:",
+        ]
+        limitations = (
+            analysis.limitations
+            if analysis is not None and analysis.limitations
+            else [
+                "MobSF is an optional static-analysis provider.",
+                "AppProbe does not depend on MobSF being available.",
+                "MobSF findings are normalized into AppProbe's Finding model.",
+                "MobSF does not replace AppProbe's deterministic scanners.",
+                "Dynamic analysis is NOT part of Milestone 2.8.",
+            ]
+        )
+        for item in limitations:
+            lines.append(f"- {item}")
         return "\n".join(lines)
 
     def _testing_coverage(self, job: ScanJob) -> str:
@@ -758,7 +805,8 @@ class MarkdownReporter:
             "",
             "This is a Milestone 2 report. The following were **not** performed unless a tool row above says EXECUTED:",
             "",
-            "- MobSF / JADX / apktool when those binaries or services are absent",
+            "- MobSF / JADX / apktool when those binaries or services are absent or disabled",
+            "- MobSF dynamic analysis (not part of Milestone 2.8)",
             "- Android emulator install, launch, UI exploration",
             "- logcat / crash / ANR collection",
             "- Network interception",
@@ -843,9 +891,12 @@ def _tool_table_rows(job: ScanJob) -> list[tuple[str, ...]]:
     rows.append(("Correlation", _tool_status_label(corr_status), "AppProbe"))
     mobsf = by_name.get("mobsf")
     if mobsf is None:
-        rows.append(("MobSF", "NOT AVAILABLE", "-"))
+        rows.append(("MobSF", "NOT ENABLED", "-"))
     else:
-        rows.append(("MobSF", _tool_status_label(mobsf.status), mobsf.version or "-"))
+        version = mobsf.version or "-"
+        if mobsf.status is ToolStatus.AVAILABLE_AND_EXECUTED and version == "-":
+            version = (job.mobsf_analysis.version if job.mobsf_analysis else None) or "Unknown"
+        rows.append(("MobSF", _tool_status_label(mobsf.status), version))
     return rows
 
 
@@ -856,8 +907,16 @@ def _tool_status_label(status: ToolStatus) -> str:
         ToolStatus.NOT_AVAILABLE: "NOT AVAILABLE",
         ToolStatus.NOT_EXECUTED: "NOT EXECUTED",
         ToolStatus.TIMEOUT: "TIMEOUT",
+        ToolStatus.NOT_ENABLED: "NOT ENABLED",
+        ToolStatus.AUTH_FAILED: "AUTH FAILED",
     }
     return labels.get(status, status.value)
+
+
+def _format_duration(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.1f}s"
 
 
 def _json(value: object) -> str:

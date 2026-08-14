@@ -1,0 +1,61 @@
+{
+  "package_name": "com.example.vulnerable",
+  "version_name": "1.2.3",
+  "version_code": "42",
+  "app_name": "VulnApp",
+  "file_name": "app.apk",
+  "hash": "0123456789abcdef0123456789abcdef",
+  "mobsf_version": "4.3.0",
+  "security_score": 42,
+  "manifest_analysis": {
+    "manifest_findings": [
+      {
+        "rule": "exported_activity",
+        "title": "Exported activity: .ExportedActivity",
+        "severity": "warning",
+        "description": "An activity is exported without a permission restriction.",
+        "recommendation": "Export only components that must be reachable.",
+        "component": ".ExportedActivity",
+        "cwe": "CWE-926",
+        "masvs": "MASVS-PLATFORM",
+        "owasp-mobile": "M8: Security Misconfiguration"
+      },
+      {
+        "rule": "app_is_debuggable",
+        "title": "Application is debuggable",
+        "severity": "high",
+        "description": "android:debuggable is true",
+        "recommendation": "Disable android:debuggable in release builds.",
+        "component": "application"
+      }
+    ]
+  },
+  "network_security": {
+    "cleartext": {
+      "description": "Cleartext traffic is permitted for the application.",
+      "severity": "warning"
+    }
+  },
+  "code_analysis": {
+    "findings": {
+      "weak_crypto": {
+        "files": {
+          "com/example/vulnerable/Crypto.java": "12"
+        },
+        "metadata": {
+          "severity": "high",
+          "description": "Weak cryptographic algorithm referenced",
+          "cwe": "CWE-327",
+          "masvs": "MASVS-CRYPTO",
+          "confidence": 0.55,
+          "recommendation": "Use platform-recommended cryptographic primitives."
+        }
+      }
+    }
+  },
+  "trackers": {
+    "trackers": [
+      {"name": "Example Analytics"}
+    ]
+  }
+}

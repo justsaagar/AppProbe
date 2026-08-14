@@ -18,6 +18,7 @@ from app.models.enums import (
     ToolStatus,
 )
 from app.models.finding import Finding
+from app.models.mobsf import MobSFAnalysis
 from app.models.technology import DependencyScanCoverage, TechnologyRecord
 
 
@@ -133,6 +134,7 @@ class ScanJob(BaseModel):
     technology_inventory: list[TechnologyRecord] = Field(default_factory=list)
     dependency_scan_coverage: DependencyScanCoverage | None = None
     vulnerability_assessment: VulnerabilityAssessment | None = None
+    mobsf_analysis: MobSFAnalysis | None = None
 
     def mark(
         self,

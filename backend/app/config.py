@@ -69,8 +69,14 @@ class Settings(BaseSettings):
     advisory_batch_size: int = 20
     advisory_max_concurrency: int = 2
 
+    mobsf_enabled: bool = False
     mobsf_url: str = ""
     mobsf_api_key: str = ""
+    mobsf_timeout_seconds: float = 30.0
+    mobsf_connect_timeout_seconds: float = 5.0
+    mobsf_poll_interval_seconds: float = 2.0
+    mobsf_max_wait_seconds: float = 180.0
+    mobsf_max_response_bytes: int = 8 * 1024 * 1024
     jadx_bin: str = ""
     apktool_bin: str = ""
 
