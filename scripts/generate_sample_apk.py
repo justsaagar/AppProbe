@@ -57,6 +57,16 @@ def _synthetic_assets() -> dict[str, bytes]:
     return {
         "assets/secrets.txt": secrets_txt.encode(),
         "google-services.json": firebase.encode(),
+        "lib/arm64-v8a/libflutter.so": b"\x7fELF",
+        "assets/flutter_assets/AssetManifest.json": b"{}",
+        "com/google/firebase/auth/FirebaseAuth.class": b"dummy",
+        "com/google/firebase/messaging/FirebaseMessaging.class": b"dummy",
+        "okhttp3/OkHttpClient.class": b"dummy",
+        "com/stripe/android/Stripe.class": b"dummy",
+        "com/appsflyer/AppsFlyerLib.class": b"dummy",
+        "META-INF/maven/com.squareup.okhttp3/okhttp/pom.properties": (
+            b"groupId=com.squareup.okhttp3\nartifactId=okhttp\nversion=4.12.0\n"
+        ),
     }
 
 

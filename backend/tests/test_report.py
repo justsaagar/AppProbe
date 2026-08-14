@@ -62,6 +62,8 @@ def test_report_contains_required_sections() -> None:
         "## 15. Permissions",
         "## 16. Dependencies",
         "## 17. Technology Detection",
+        "## Technology & Dependency Inventory",
+        "Dependency vulnerability assessment",
         "## 18. Screenshots / Evidence",
         "## 19. Remediation Recommendations",
         "## 20. Limitations",

@@ -18,12 +18,14 @@ from app.models.scan_job import (
     SkippedScanFile,
     ToolRunRecord,
 )
+from app.models.technology import DependencyScanCoverage, TechnologyRecord
 
 __all__ = [
     "ApplicationMetadata",
     "ArtifactKind",
     "CorrelatedGroup",
     "CoverageNote",
+    "DependencyScanCoverage",
     "Evidence",
     "Finding",
     "FindingCategory",
@@ -33,6 +35,7 @@ __all__ = [
     "SecretScanCoverage",
     "SkippedScanFile",
     "Severity",
+    "TechnologyRecord",
     "ToolExecutionStatus",
     "ToolRunRecord",
     "ToolStatus",

@@ -3,11 +3,22 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2.4**: a deterministic
-secret scanner over the raw APK plus optional JADX/apktool output.
+actual analysis. This repository is at **Milestone 2.5**: a dependency and SDK
+inventory scanner over the raw APK plus optional JADX/apktool output.
 
 Runtime testing, network interception, LLM analysis, and the dashboard are
 **not** implemented and are **not faked**.
+
+## Milestone 2.5 — dependency and SDK scanner
+
+- Detects recognizable frameworks, SDKs, and libraries from package paths,
+  native libraries, Maven metadata, and Flutter package assets
+- Records versions only when evidence exists; otherwise Version is Unknown
+- Emits informational technology findings — **not** vulnerabilities
+- Does **not** call NVD/OSV/Snyk or assign CVEs
+- Merges duplicate evidence from APK / JADX / apktool into one inventory row
+
+See [docs/milestone-2-5.md](docs/milestone-2-5.md).
 
 ## Milestone 2.4 — deterministic secret scanner
 
@@ -151,4 +162,5 @@ in an emulator.
 See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/milestone-1.md),
 [docs/milestone-2.md](docs/milestone-2.md), [docs/milestone-2-1.md](docs/milestone-2-1.md),
 [docs/milestone-2-2.md](docs/milestone-2-2.md), [docs/milestone-2-3.md](docs/milestone-2-3.md),
-and [docs/milestone-2-4.md](docs/milestone-2-4.md).
+and [docs/milestone-2-4.md](docs/milestone-2-4.md), and
+[docs/milestone-2-5.md](docs/milestone-2-5.md).

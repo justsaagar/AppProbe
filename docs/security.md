@@ -31,6 +31,17 @@ Findings never include the complete secret. Private keys are rendered as
 (`google-services.json`, project IDs, client API keys) is not classified as a
 vulnerability; service-account private keys are.
 
+## Dependency and SDK scanner (Milestone 2.5)
+
+Dependency and SDK detection is informational in Milestone 2.5.
+
+A detected dependency is NOT automatically considered vulnerable.
+
+CVE/advisory database integration is intentionally deferred.
+
+The scanner does not call NVD, OSV, Snyk, or GitHub Advisory. Test fixtures may
+use harmless package names such as `com.stripe.android` without credentials.
+
 ## Historical GitGuardian incidents
 
 GitGuardian reported three findings in commit `9f26f4c` (file
