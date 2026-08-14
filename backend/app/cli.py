@@ -40,22 +40,18 @@ async def scan_file(path: Path) -> int:
     orchestrator = ScanOrchestrator(store, workspace, settings, default_scanners())
 
     job = await service.create_from_path(path.resolve())
-    last_index = {"n": 0}
+    seen: set[str] = set()
 
     def on_progress(_percent: int, stage: str) -> None:
+        if stage in seen:
+            return
+        seen.add(stage)
+        if stage.startswith("["):
+            print(stage, flush=True)
+            return
         if stage in CLI_STAGES:
             idx = CLI_STAGES.index(stage) + 1
-            if idx != last_index["n"]:
-                print(f"[{idx}/8] {stage}", flush=True)
-                last_index["n"] = idx
-                skipped = {
-                    "Preparing Android runtime": "SKIPPED: Android Emulator unavailable (Milestone 1)",
-                    "Running dynamic analysis": "SKIPPED: Runtime Testing: NOT EXECUTED",
-                    "Correlating findings": "SKIPPED: correlation engine not implemented",
-                    "Running AI analysis": "SKIPPED: AI analyzer not implemented",
-                }
-                if stage in skipped:
-                    print(f"         {skipped[stage]}", flush=True)
+            print(f"[{idx}/10] {stage}", flush=True)
 
     result = await orchestrator.run(job.id, progress=on_progress)
     if result.status.value == "FAILED":

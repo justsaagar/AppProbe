@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-from app.models.enums import FindingCategory, Severity
+from app.models.enums import FindingCategory, Severity, Verification
 from app.models.finding import Evidence, Finding
 
 # Only mappings we can assert from scanner rule ids. Empty if unknown.
@@ -38,6 +38,11 @@ CWE = {
     "exported_service": "CWE-926",
     "exported_receiver": "CWE-926",
     "exported_provider": "CWE-926",
+    "hardcoded_secret": "CWE-798",
+    "private_key": "CWE-321",
+    "jwt": "CWE-798",
+    "http_endpoint": "CWE-319",
+    "weak_crypto": "CWE-327",
 }
 
 
@@ -63,7 +68,15 @@ def normalize_finding(
     affected_component: str | None = None,
     reproducibility: str = "",
     potential: bool = False,
+    verification: Verification | None = None,
 ) -> Finding:
+    if verification is None:
+        if potential:
+            verification = Verification.POTENTIAL
+        elif severity is Severity.INFO:
+            verification = Verification.INFO
+        else:
+            verification = Verification.CONFIRMED
     return Finding(
         id=finding_id(source, rule_id, affected_component),
         title=title,
@@ -71,6 +84,8 @@ def normalize_finding(
         severity=severity,
         confidence=max(0.0, min(1.0, confidence)),
         source=source,
+        sources=[source],
+        rule_id=rule_id,
         description=description,
         impact=impact,
         recommendation=recommendation,
@@ -80,5 +95,6 @@ def normalize_finding(
         masvs=MASVS.get(rule_id),
         reproducibility=reproducibility,
         affected_component=affected_component,
-        potential=potential,
+        potential=potential or verification is Verification.POTENTIAL,
+        verification=verification,
     )

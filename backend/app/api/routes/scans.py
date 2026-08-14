@@ -66,6 +66,7 @@ def to_detail(job: ScanJob) -> ScanDetail:
         coverage=job.coverage,
         stages_completed=job.stages_completed,
         finding_count=len(job.findings),
+        tool_runs=job.tool_runs,
     )
 
 

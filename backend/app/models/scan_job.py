@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import ArtifactKind, Platform, ScanStatus
+from app.models.enums import ArtifactKind, Platform, ScanStatus, ToolStatus
 from app.models.finding import Finding
 
 
@@ -19,6 +19,23 @@ class CoverageNote(BaseModel):
     area: str
     executed: bool
     reason: str
+
+
+class ToolRunRecord(BaseModel):
+    name: str
+    status: ToolStatus = ToolStatus.NOT_EXECUTED
+    version: str | None = None
+    reason: str = ""
+    output_dir: str | None = None
+
+
+class CorrelatedGroup(BaseModel):
+    fingerprint: str
+    title: str
+    finding_ids: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    canonical_id: str | None = None
+    note: str = ""
 
 
 class ApplicationMetadata(BaseModel):
@@ -61,6 +78,8 @@ class ScanJob(BaseModel):
     stages_completed: list[str] = Field(default_factory=list)
     overall_risk: str | None = None
     severity_counts: dict[str, int] = Field(default_factory=dict)
+    tool_runs: list[ToolRunRecord] = Field(default_factory=list)
+    correlated_groups: list[CorrelatedGroup] = Field(default_factory=list)
 
     def mark(
         self,

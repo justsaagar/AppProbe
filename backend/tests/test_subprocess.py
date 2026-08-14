@@ -26,6 +26,12 @@ async def test_timeout(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_check_false_returns_nonzero() -> None:
+    result = await run_command(["/bin/false"], check=False)
+    assert result.returncode != 0
+
+
+@pytest.mark.asyncio
 async def test_missing_executable() -> None:
     with pytest.raises(SubprocessError, match="not found"):
         await run_command(["/definitely/not/a/binary"])

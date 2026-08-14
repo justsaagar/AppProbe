@@ -3,20 +3,20 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 1**: APK upload, manifest
-metadata, normalized findings, and a Markdown security report.
+actual analysis. This repository is at **Milestone 2**: modular static analysis
+(manifest, optional MobSF/JADX/apktool, secrets, dependencies, correlation).
 
-Later milestones add MobSF/JADX, emulator runtime, UI exploration, network
-analysis, AI correlation, and a dashboard. Those stages are **not faked**.
+Runtime testing, network interception, LLM analysis, and the dashboard are
+**not** implemented and are **not faked**.
 
-## Milestone 1 capabilities
+## Milestone 2 capabilities
 
-- Upload APK (primary), AAB, or IPA
-- Create a scan job and run analysis asynchronously
-- Validate ZIP structure (including zip-slip protection)
-- Extract Android package metadata from `AndroidManifest.xml`
-- Static manifest checks (exported components, cleartext, debuggable, backup, dangerous permissions)
-- Write `workspace/reports/<scan-id>/security-report.md`
+- Everything in Milestone 1 (upload, validation, AXML metadata, manifest findings)
+- Optional MobSF / JADX / apktool adapters with honest NOT_AVAILABLE status
+- Deterministic secret detection with redaction
+- SDK/dependency detection (no invented CVEs)
+- Finding correlation that preserves scanner sources
+- `workspace/reports/<scan-id>/security-report.md` with a tools coverage table
 
 AAB files are inspected as bundles. They are **not** silently treated as
 installable APKs. iOS IPA files are accepted and validated; dynamic iOS testing
@@ -26,7 +26,8 @@ requires a supported macOS/device environment and is not executed.
 
 - Python 3.12+
 
-Optional later: Android SDK/emulator, bundletool, JADX, apktool, MobSF, an LLM API key.
+Optional: JADX, apktool (Java), MobSF REST (`MOBSF_URL`) or `mobsfscan`. See
+[docs/milestone-2.md](docs/milestone-2.md).
 
 ## Setup
 
@@ -59,20 +60,23 @@ make scan FILE=workspace/samples/vulnerable-demo.apk
 Expected:
 
 ```
-[1/8] Validating artifact
-[2/8] Extracting metadata
-[3/8] Running static analysis
-[4/8] Preparing Android runtime
-[5/8] Running dynamic analysis
-[6/8] Correlating findings
-[7/8] Running AI analysis
-[8/8] Generating report
+[1/10] Validating artifact
+[2/10] Extracting metadata
+[3/10] Running manifest analysis
+[4/10] MobSF - NOT AVAILABLE
+[5/10] JADX - NOT AVAILABLE
+[6/10] apktool - NOT AVAILABLE
+[7/10] Running secret detection
+[8/10] Running dependency analysis
+[9/10] Correlating findings
+[10/10] Generating report
 Scan completed.
 Report:
 workspace/reports/<scan-id>/security-report.md
 ```
 
-Stages 4–7 are skipped in Milestone 1 and recorded as NOT EXECUTED in the report.
+If JADX/apktool/MobSF are installed, those lines show EXECUTED instead of NOT AVAILABLE.
+Runtime/AI stages are omitted from the CLI counter and recorded as NOT EXECUTED in the report.
 
 Equivalent:
 
@@ -103,4 +107,5 @@ in an emulator.
 
 ## Layout
 
-See [docs/architecture.md](docs/architecture.md) and [docs/milestone-1.md](docs/milestone-1.md).
+See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/milestone-1.md),
+and [docs/milestone-2.md](docs/milestone-2.md).

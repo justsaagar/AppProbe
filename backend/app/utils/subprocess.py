@@ -58,6 +58,7 @@ async def run_command(
     cwd: Path | None = None,
     extra_env: dict[str, str] | None = None,
     input_bytes: bytes | None = None,
+    check: bool = True,
 ) -> SubprocessResult:
     """Run a command as an argument array. ``shell`` is never enabled."""
     if not args:
@@ -96,7 +97,7 @@ async def run_command(
     stdout = stdout_b.decode("utf-8", errors="replace")
     stderr = stderr_b.decode("utf-8", errors="replace")
     returncode = process.returncode or 0
-    if returncode != 0:
+    if check and returncode != 0:
         raise SubprocessError(
             f"command failed ({returncode}): {args[0]}",
             returncode=returncode,
@@ -111,8 +112,9 @@ def run_command_sync(
     timeout: float = 60.0,
     cwd: Path | None = None,
     extra_env: dict[str, str] | None = None,
+    check: bool = True,
 ) -> SubprocessResult:
     """Synchronous wrapper used by unit tests and non-async callers."""
     return asyncio.run(
-        run_command(args, timeout=timeout, cwd=cwd, extra_env=extra_env)
+        run_command(args, timeout=timeout, cwd=cwd, extra_env=extra_env, check=check)
     )

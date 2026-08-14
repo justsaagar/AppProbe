@@ -16,6 +16,9 @@ class ScanWorkspace:
         self.screenshots = root / "screenshots"
         self.logs = root / "logs"
         self.report = root / "report"
+        self.tools = root / "tools"
+        self.findings_dir = root / "findings"
+        self.evidence = root / "evidence"
 
     def ensure(self) -> None:
         for path in (
@@ -26,6 +29,9 @@ class ScanWorkspace:
             self.screenshots,
             self.logs,
             self.report,
+            self.tools,
+            self.findings_dir,
+            self.evidence,
         ):
             path.mkdir(parents=True, exist_ok=True)
 

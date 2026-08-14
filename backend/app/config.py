@@ -33,8 +33,16 @@ class Settings(BaseSettings):
 
     subprocess_timeout_seconds: int = 60
     scan_stage_timeout_seconds: int = 300
+    tool_timeout_seconds: int = 180
+    max_secret_file_bytes: int = 2 * 1024 * 1024
+    max_secret_scan_files: int = 4000
 
-    # Milestone 6 placeholders — unused in Milestone 1.
+    mobsf_url: str = ""
+    mobsf_api_key: str = ""
+    jadx_bin: str = ""
+    apktool_bin: str = ""
+
+    # Milestone 6 placeholders — unused in Milestone 2.
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: str = ""

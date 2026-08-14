@@ -69,6 +69,10 @@ def test_report_contains_required_sections() -> None:
         "Runtime Testing: NOT EXECUTED",
         "com.example.vulnerable",
         "No LLM",
+        "## Static Analysis Coverage",
+        "## Secrets & Sensitive Data",
+        "## Correlated Findings",
+        "Manifest Scanner",
     ]
     for section in required:
         assert section in markdown, f"missing {section!r}"

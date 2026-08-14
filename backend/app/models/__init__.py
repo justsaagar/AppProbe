@@ -4,13 +4,22 @@ from app.models.enums import (
     Platform,
     ScanStatus,
     Severity,
+    ToolStatus,
+    Verification,
 )
 from app.models.finding import Evidence, Finding
-from app.models.scan_job import ApplicationMetadata, CoverageNote, ScanJob
+from app.models.scan_job import (
+    ApplicationMetadata,
+    CorrelatedGroup,
+    CoverageNote,
+    ScanJob,
+    ToolRunRecord,
+)
 
 __all__ = [
     "ApplicationMetadata",
     "ArtifactKind",
+    "CorrelatedGroup",
     "CoverageNote",
     "Evidence",
     "Finding",
@@ -19,4 +28,7 @@ __all__ = [
     "ScanJob",
     "ScanStatus",
     "Severity",
+    "ToolRunRecord",
+    "ToolStatus",
+    "Verification",
 ]

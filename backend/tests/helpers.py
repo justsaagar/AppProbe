@@ -81,7 +81,11 @@ def vulnerable_manifest() -> XmlNode:
     )
 
 
-def write_apk(path: Path, manifest: XmlNode | None = None) -> Path:
+def write_apk(
+    path: Path,
+    manifest: XmlNode | None = None,
+    extra_files: dict[str, bytes] | None = None,
+) -> Path:
     node = manifest or vulnerable_manifest()
     encoded = encode_axml(node)
     with zipfile.ZipFile(path, "w") as archive:
@@ -89,6 +93,8 @@ def write_apk(path: Path, manifest: XmlNode | None = None) -> Path:
         archive.writestr("classes.dex", b"dex\n035\x00" + b"\x00" * 32)
         archive.writestr("resources.arsc", b"\x00" * 16)
         archive.writestr("lib/arm64-v8a/libdemo.so", b"\x7fELF")
+        for name, data in (extra_files or {}).items():
+            archive.writestr(name, data)
     return path
 
 

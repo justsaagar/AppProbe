@@ -31,6 +31,13 @@ RULE_SEVERITY: dict[str, Severity] = {
     "ios_dynamic_unavailable": Severity.INFO,
     "aab_not_converted": Severity.INFO,
     "runtime_not_executed": Severity.INFO,
+    "hardcoded_secret": Severity.HIGH,
+    "private_key": Severity.CRITICAL,
+    "jwt": Severity.HIGH,
+    "cloud_credential": Severity.CRITICAL,
+    "http_endpoint": Severity.INFO,
+    "sdk_detected": Severity.INFO,
+    "weak_crypto": Severity.MEDIUM,
 }
 
 

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.models.enums import ArtifactKind, Platform, ScanStatus
 from app.models.finding import Finding
-from app.models.scan_job import ApplicationMetadata, CoverageNote
+from app.models.scan_job import ApplicationMetadata, CoverageNote, ToolRunRecord
 
 
 class ScanSummary(BaseModel):
@@ -32,6 +32,7 @@ class ScanDetail(ScanSummary):
     coverage: list[CoverageNote] = Field(default_factory=list)
     stages_completed: list[str] = Field(default_factory=list)
     finding_count: int = 0
+    tool_runs: list[ToolRunRecord] = Field(default_factory=list)
 
 
 class FindingList(BaseModel):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.models.enums import Severity
+from app.models.enums import FindingCategory, Severity, ToolStatus
 from app.models.finding import Finding
 from app.models.scan_job import ScanJob
 from app.utils.redact import redact_text
@@ -26,10 +26,13 @@ class MarkdownReporter:
             self._executive_summary(job),
             self._application_information(job),
             self._scan_environment(job),
+            self._static_coverage(job),
             self._testing_coverage(job),
             self._overall_risk(job),
             self._severity_summary(job),
             *self._findings_by_severity(job),
+            self._secrets_section(job),
+            self._correlated_section(job),
             self._functional_tests(job),
             self._crash_analysis(job),
             self._network_analysis(job),
@@ -59,7 +62,7 @@ class MarkdownReporter:
         lines = [
             "## 1. Executive Summary",
             "",
-            f"AppProbe completed Milestone 1 static analysis of `{job.filename}` "
+            f"AppProbe completed Milestone 2 static analysis of `{job.filename}` "
             f"(package `{pkg}`).",
             "",
             f"**Overall risk:** {risk}",
@@ -73,8 +76,8 @@ class MarkdownReporter:
             f"- INFO: {counts.get('INFO', 0)}",
             "",
             "This report is produced by deterministic scanners. "
-            "No LLM, emulator, network interceptor, or third-party static engine "
-            "(MobSF, JADX, apktool) was invoked.",
+            "No LLM, emulator, or network interceptor was invoked. "
+            "Optional tools (MobSF, JADX, apktool) are listed below only when they actually ran.",
         ]
         return "\n".join(lines)
 
@@ -110,13 +113,31 @@ class MarkdownReporter:
             [
                 "## 3. Scan Environment",
                 "",
-                "- Analyzer: AppProbe Milestone 1 (custom AXML / manifest scanner)",
+                "- Analyzer: AppProbe Milestone 2 (manifest, secrets, dependencies, optional external tools)",
                 "- Host isolation: per-scan workspace under `workspace/scans/<id>`",
                 "- Runtime: not prepared",
                 "- Network interception: not prepared",
                 "- AI provider: not configured / not invoked",
             ]
         )
+
+    def _static_coverage(self, job: ScanJob) -> str:
+        lines = [
+            "## Static Analysis Coverage",
+            "",
+            "### Tools",
+            "",
+        ]
+        rows = _tool_table_rows(job)
+        lines.extend(_table(["Tool", "Status", "Version"], rows))
+        lines.extend(
+            [
+                "",
+                "Statuses: AVAILABLE_AND_EXECUTED, AVAILABLE_BUT_FAILED, NOT_AVAILABLE, NOT_EXECUTED.",
+                "Absence of a tool is not a passing test.",
+            ]
+        )
+        return "\n".join(lines)
 
     def _testing_coverage(self, job: ScanJob) -> str:
         lines = ["## 4. Testing Coverage", ""]
@@ -187,6 +208,8 @@ class MarkdownReporter:
             f"- Confidence: {finding.confidence:.2f}",
             f"- Category: {finding.category}",
             f"- Source: `{finding.source}`",
+            f"- Sources: {', '.join(f'`{item}`' for item in finding.sources) or finding.source}",
+            f"- Verification: {finding.verification.value}",
             f"- Component: `{finding.affected_component or 'n/a'}`",
         ]
         if finding.cwe:
@@ -211,6 +234,33 @@ class MarkdownReporter:
         else:
             lines.append("_No evidence attached; treat as unverified._")
         lines.append("")
+        return "\n".join(lines)
+
+    def _secrets_section(self, job: ScanJob) -> str:
+        lines = ["## Secrets & Sensitive Data", ""]
+        secrets = [
+            item
+            for item in job.findings
+            if item.category in {FindingCategory.SECRETS, "secrets"}
+        ]
+        if not secrets:
+            lines.append("No secret-scanner findings were reported.")
+            return "\n".join(lines)
+        for finding in secrets:
+            lines.append(self._render_finding(finding))
+        lines.append("Complete credentials are never written to this report.")
+        return "\n".join(lines)
+
+    def _correlated_section(self, job: ScanJob) -> str:
+        lines = ["## Correlated Findings", ""]
+        if not job.correlated_groups:
+            lines.append("No duplicate groups were merged in this scan.")
+            return "\n".join(lines)
+        for group in job.correlated_groups:
+            lines.append(f"- **{group.title}** (`{group.fingerprint}`)")
+            lines.append(f"  - Canonical: `{group.canonical_id}`")
+            lines.append(f"  - Sources: {', '.join(group.sources)}")
+            lines.append(f"  - {group.note}")
         return "\n".join(lines)
 
     def _functional_tests(self, _job: ScanJob) -> str:
@@ -238,7 +288,7 @@ class MarkdownReporter:
                 "",
                 "Runtime Testing: NOT EXECUTED",
                 "",
-                "Reason: Network interception (mitmproxy) and Android Emulator are not part of Milestone 1.",
+                "Reason: Network interception (mitmproxy) and Android Emulator are not part of Milestone 2.",
                 "",
                 "Certificate pinning was not evaluated. Absence of interception is not classified as a vulnerability.",
             ]
@@ -254,14 +304,33 @@ class MarkdownReporter:
         lines.extend(_table(["Permission"], rows))
         return "\n".join(lines)
 
-    def _dependencies(self, _job: ScanJob) -> str:
-        return "\n".join(
+    def _dependencies(self, job: ScanJob) -> str:
+        lines = ["## 16. Dependencies", ""]
+        sdks = [
+            item
+            for item in job.findings
+            if item.rule_id == "sdk_detected" and item.affected_component not in {None, "dependencies"}
+        ]
+        if not sdks:
+            lines.append(
+                "No third-party SDK signatures were detected, or the artifact had no inspectable package paths."
+            )
+            lines.append("")
+            lines.append(
+                "Dependency detected; vulnerability version verification not available in this milestone. "
+                "CVEs are not invented."
+            )
+            return "\n".join(lines)
+        rows = [(item.affected_component or item.title, item.source) for item in sdks]
+        lines.extend(_table(["SDK", "Source"], rows))
+        lines.extend(
             [
-                "## 16. Dependencies",
                 "",
-                "Dependency / SDK vulnerability scanning was **not executed**. Planned for Milestone 2.",
+                "Detected libraries are informational. Vulnerability version verification is not available "
+                "in this milestone. CVEs are not invented.",
             ]
         )
+        return "\n".join(lines)
 
     def _technology(self, job: ScanJob) -> str:
         meta = job.metadata
@@ -277,7 +346,12 @@ class MarkdownReporter:
                 lines.append(f"  - `{lib}`")
         else:
             lines.append("- Native libraries: none listed in the archive")
-        lines.append("- DEX / JADX decompilation: not executed (Milestone 2)")
+        jadx = next((run for run in job.tool_runs if run.name == "jadx"), None)
+        if jadx and jadx.status is ToolStatus.AVAILABLE_AND_EXECUTED:
+            lines.append(f"- JADX: EXECUTED ({jadx.reason})")
+        else:
+            reason = jadx.reason if jadx else "JADX not run"
+            lines.append(f"- JADX: not executed ({reason})")
         return "\n".join(lines)
 
     def _screenshots(self, _job: ScanJob) -> str:
@@ -309,16 +383,16 @@ class MarkdownReporter:
         lines = [
             "## 20. Limitations",
             "",
-            "This is a Milestone 1 report. The following were **not** performed:",
+            "This is a Milestone 2 report. The following were **not** performed unless a tool row above says EXECUTED:",
             "",
-            "- MobSF / JADX / apktool / bundletool scans",
-            "- Secret scanning beyond future Milestone 2 detectors",
-            "- Finding correlation / duplicate merging",
+            "- MobSF / JADX / apktool when those binaries or services are absent",
+            "- Vulnerability (CVE) version matching for detected SDKs",
             "- Android emulator install, launch, UI exploration",
             "- logcat / crash / ANR collection",
             "- Network interception",
             "- LLM reasoning or AI-adjusted severity",
             "- iOS dynamic testing",
+            "- bundletool conversion of AAB to APK",
             "",
             "Do not treat skipped areas as passing tests.",
         ]
@@ -350,6 +424,31 @@ def _table(headers: list[str], rows: list[tuple[str, ...]]) -> list[str]:
         escaped = [str(cell).replace("|", "\\|") for cell in row]
         lines.append("| " + " | ".join(escaped) + " |")
     return lines
+
+
+def _tool_table_rows(job: ScanJob) -> list[tuple[str, ...]]:
+    by_name = {run.name: run for run in job.tool_runs}
+    builtin = [
+        ("Manifest Scanner", ToolStatus.AVAILABLE_AND_EXECUTED, "AppProbe"),
+        ("Secret Scanner", ToolStatus.AVAILABLE_AND_EXECUTED, "AppProbe"),
+        ("Dependency Scanner", ToolStatus.AVAILABLE_AND_EXECUTED, "AppProbe"),
+    ]
+    if job.platform.value == "ios":
+        builtin = [
+            ("Manifest Scanner", ToolStatus.NOT_EXECUTED, "AppProbe"),
+            ("Secret Scanner", ToolStatus.NOT_EXECUTED, "AppProbe"),
+            ("Dependency Scanner", ToolStatus.NOT_EXECUTED, "AppProbe"),
+        ]
+    rows: list[tuple[str, ...]] = [
+        (name, status.value, version) for name, status, version in builtin
+    ]
+    for label, key in (("MobSF", "mobsf"), ("JADX", "jadx"), ("apktool", "apktool")):
+        run = by_name.get(key)
+        if run is None:
+            rows.append((label, ToolStatus.NOT_AVAILABLE.value, "-"))
+        else:
+            rows.append((label, run.status.value, run.version or "-"))
+    return rows
 
 
 def _json(value: object) -> str:

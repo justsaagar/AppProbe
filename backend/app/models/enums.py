@@ -53,3 +53,16 @@ class FindingCategory(StrEnum):
     FUNCTIONAL = "functional"
     PLATFORM = "platform"
     PROCESS = "process"
+
+
+class Verification(StrEnum):
+    CONFIRMED = "CONFIRMED"
+    POTENTIAL = "POTENTIAL"
+    INFO = "INFO"
+
+
+class ToolStatus(StrEnum):
+    AVAILABLE_AND_EXECUTED = "AVAILABLE_AND_EXECUTED"
+    AVAILABLE_BUT_FAILED = "AVAILABLE_BUT_FAILED"
+    NOT_AVAILABLE = "NOT_AVAILABLE"
+    NOT_EXECUTED = "NOT_EXECUTED"
