@@ -57,6 +57,15 @@ JADX output is generated for downstream analysis. No security findings are
 generated directly by the JADX adapter. See
 [docs/milestone-2-2.md](milestone-2-2.md).
 
+## apktool adapter (Milestone 2.3)
+
+`ApktoolTool` uses `ToolDefinition` + `ExternalToolExecutor`. It decodes APKs
+into `workspace/scans/<id>/tools/apktool/output/`.
+
+apktool provides decoded application artifacts for downstream analysis.
+The apktool adapter itself does not generate security findings. See
+[docs/milestone-2-3.md](milestone-2-3.md).
+
 ## Finding model
 
 Normalized `Finding` records include `source`, `sources` (after merge),
