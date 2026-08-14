@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AppProbe scan workspace (keep directory placeholders)
+workspace/uploads/**
+workspace/scans/**
+workspace/artifacts/**
+workspace/screenshots/**
+workspace/logs/**
+workspace/reports/**
+workspace/samples/**
+workspace/jobs.json
+!workspace/**/.gitkeep
