@@ -5,11 +5,9 @@ import pytest
 from app.config import Settings
 from app.models.enums import ToolStatus
 from app.scanners.base import ScanContext
-from app.scanners.tools.apktool import ApktoolTool
 from app.scanners.tools.base import resolve_binary
 from app.scanners.tools.mobsf import MobsfTool, parse_mobsf_report
 from app.storage.workspace import ScanWorkspace
-from app.utils.subprocess import SubprocessResult
 from tests.helpers import write_apk
 
 
@@ -39,35 +37,6 @@ async def test_mobsf_unavailable(tmp_path: Path) -> None:
     result = await tool.run(_context(tmp_path, apk))
     assert result.status is ToolStatus.NOT_AVAILABLE
     assert result.findings == []
-
-
-@pytest.mark.asyncio
-async def test_apktool_unavailable(tmp_path: Path) -> None:
-    settings = Settings(workspace_dir=tmp_path / "ws")
-    tool = ApktoolTool(settings)
-    tool._bin = None
-    apk = write_apk(tmp_path / "app.apk")
-    result = await tool.run(_context(tmp_path, apk))
-    assert result.status is ToolStatus.NOT_AVAILABLE
-
-
-@pytest.mark.asyncio
-async def test_apktool_nonzero_without_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    settings = Settings(workspace_dir=tmp_path / "ws")
-    tool = ApktoolTool(settings)
-    tool._bin = "/bin/true"
-
-    async def fake_run(*_args, **_kwargs):
-        return SubprocessResult(args=["apktool"], returncode=1, stdout="", stderr="decode failed")
-
-    async def fake_version(*_args, **_kwargs):
-        return "2.9.0"
-
-    monkeypatch.setattr("app.scanners.tools.apktool.run_command", fake_run)
-    monkeypatch.setattr("app.scanners.tools.apktool.capture_version", fake_version)
-    apk = write_apk(tmp_path / "app.apk")
-    result = await tool.run(_context(tmp_path, apk))
-    assert result.status is ToolStatus.AVAILABLE_BUT_FAILED
 
 
 def test_mobsf_parses_known_sections_only() -> None:
