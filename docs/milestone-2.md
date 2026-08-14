@@ -11,7 +11,8 @@ platform without pretending optional tools ran.
 - Availability detection and structured statuses:
   `AVAILABLE_AND_EXECUTED`, `AVAILABLE_BUT_FAILED`, `NOT_AVAILABLE`, `NOT_EXECUTED`
 - Deterministic secret detector with redaction and false-positive guards
-- SDK/dependency detector (informational; no invented CVEs)
+- SDK/dependency detector (informational inventory)
+- Vulnerability / advisory matching via OSV (affected versions only)
 - Finding correlation / deduplication that preserves sources and evidence
 - Report sections for tool coverage, secrets, and correlated groups
 - Isolated tool output under `workspace/scans/<id>/tools/`
@@ -53,5 +54,4 @@ If neither is present, the report records **MobSF: NOT_AVAILABLE** and the scan 
 - Network interception
 - LLM analysis
 - Dashboard
-- CVE/version matching for libraries
 - bundletool APK-set generation

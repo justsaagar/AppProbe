@@ -61,6 +61,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    advisory_network_enabled: bool = True
+    osv_base_url: str = "https://api.osv.dev"
+    advisory_timeout_seconds: float = 20.0
+    advisory_connect_timeout_seconds: float = 5.0
+    advisory_max_response_bytes: int = 1_048_576
+    advisory_batch_size: int = 20
+    advisory_max_concurrency: int = 2
+
     mobsf_url: str = ""
     mobsf_api_key: str = ""
     jadx_bin: str = ""

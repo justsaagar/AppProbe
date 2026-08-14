@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.models.advisory import VulnerabilityAssessment
 from app.models.enums import (
     ArtifactKind,
     Platform,
@@ -110,6 +111,7 @@ class ScanJob(BaseModel):
     secret_scan_coverage: SecretScanCoverage | None = None
     technology_inventory: list[TechnologyRecord] = Field(default_factory=list)
     dependency_scan_coverage: DependencyScanCoverage | None = None
+    vulnerability_assessment: VulnerabilityAssessment | None = None
 
     def mark(
         self,

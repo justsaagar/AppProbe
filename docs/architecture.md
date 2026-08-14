@@ -11,7 +11,8 @@ backend/app/
   models/       ScanJob, Finding, enumerations, state machine
   schemas/      API response models
   services/     ScanService + ScanOrchestrator
-  scanners/     Manifest, secret, dependency scanners + tools/ adapters
+  scanners/     Manifest, secret, dependency, vulnerability scanners + tools/
+  advisories/   AdvisoryProvider + OSV.dev client, mapping, version matching
   tools/        External executable discovery + safe process execution
   analyzers/    AXML parser, validator, metadata, severity, correlation
   reporters/    Markdown report generator
@@ -31,9 +32,10 @@ backend/app/
 6. apktool adapter (skipped if unavailable)
 7. Secret detector (APK entries, JADX/apktool output when present; coverage recorded)
 8. Dependency / SDK detector
-9. Deterministic correlation
-10. Record runtime / dynamic / AI as **NOT EXECUTED**
-11. Write `workspace/reports/<scan-id>/security-report.md`
+9. Vulnerability / advisory matching (OSV)
+10. Deterministic correlation
+11. Record runtime / dynamic / AI as **NOT EXECUTED**
+12. Write `workspace/reports/<scan-id>/security-report.md`
 
 Raw tool output is stored under `workspace/scans/<id>/tools/` and
 `workspace/scans/<id>/findings/raw-findings.json`.
@@ -93,6 +95,19 @@ CVE/advisory database integration is intentionally deferred.
 
 See [docs/milestone-2-5.md](milestone-2-5.md).
 
+## Vulnerability / advisory scanner (Milestone 2.6)
+
+`VulnerabilityScanner` reads the technology inventory and queries an
+`AdvisoryProvider` (OSV.dev first). Findings are created only when package
+identity and version are known and the installed version falls in an
+affected range.
+
+Vulnerability assessment depends on advisory-provider availability.
+A failed advisory lookup does NOT mean that the dependency is safe.
+The scanner does not exploit vulnerabilities or validate exploitability.
+
+See [docs/milestone-2-6.md](milestone-2-6.md).
+
 ## Finding model
 
 Normalized `Finding` records include `source`, `sources` (after merge),
@@ -114,3 +129,19 @@ call provider APIs, does not exploit credentials, and does not use an LLM.
 
 Dependency/SDK detection in Milestone 2.5 is informational. It does not look
 up CVEs and does not treat a detected library as vulnerable.
+
+## Vulnerability / advisory scanner (Milestone 2.6)
+
+Advisory matching uses the public OSV API. No OSV credentials are required
+or stored.
+
+Vulnerability assessment depends on advisory-provider availability.
+
+A failed advisory lookup does NOT mean that the dependency is safe.
+
+The scanner does not exploit vulnerabilities or validate exploitability.
+
+Queries send only package ecosystem, name, and installed version. Application
+source, secrets, and artifacts are never uploaded to the advisory API.
+Advisory JSON is treated as untrusted: IDs, versions, ranges, and URLs are
+validated before use.

@@ -72,6 +72,8 @@ async def test_apk_scan_produces_findings_and_report(harness, tmp_path: Path) ->
     assert "Technology & Dependency Inventory" in report
     assert "Dependency vulnerability assessment" in report
     assert result.dependency_scan_coverage is not None
+    assert result.vulnerability_assessment is not None
+    assert result.vulnerability_assessment.status in {"COMPLETE", "INCOMPLETE", "NOT_AVAILABLE"}
     assert "MobSF" in report
     assert "| JADX |" in report
     assert any(note.area == "finding correlation" and note.executed for note in result.coverage)

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.scanners import default_scanners
-from app.services.orchestrator import CLI_STAGES, ScanOrchestrator
+from app.services.orchestrator import CLI_STAGE_COUNT, CLI_STAGES, ScanOrchestrator
 from app.services.scan_service import ScanService
 from app.storage.job_store import JsonJobStore
 from app.storage.workspace import WorkspaceManager
@@ -51,7 +51,7 @@ async def scan_file(path: Path) -> int:
             return
         if stage in CLI_STAGES:
             idx = CLI_STAGES.index(stage) + 1
-            print(f"[{idx}/10] {stage}", flush=True)
+            print(f"[{idx}/{CLI_STAGE_COUNT}] {stage}", flush=True)
 
     result = await orchestrator.run(job.id, progress=on_progress)
     if result.status.value == "FAILED":

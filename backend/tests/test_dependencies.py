@@ -37,7 +37,7 @@ async def test_detects_known_sdk_and_skips_unknown(tmp_path: Path) -> None:
     assert any("OkHttp" in title for title in titles)
     assert all(item.severity is Severity.INFO for item in findings)
     assert all(item.verification is Verification.INFO for item in findings)
-    assert any("vulnerability version verification not available" in item.description.lower() for item in findings)
+    assert any("not a vulnerability finding" in item.description.lower() for item in findings)
     assert not any("CVE-" in (item.title + item.description) and "invent" not in item.description.lower() for item in findings if "CVE-" in item.title)
 
 
