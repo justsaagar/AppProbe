@@ -8,15 +8,18 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, UploadFi
 from fastapi.responses import PlainTextResponse
 
 from app.analyzers.validator import ArtifactValidationError
+from app.api.coverage import pipeline_stages, scanner_coverage
 from app.models.enums import ScanStatus
 from app.models.scan_job import ScanJob
 from app.schemas.scan import (
     ArtifactEntry,
     ArtifactList,
     FindingList,
+    PublicConfig,
     ReportResponse,
     ScanDetail,
     ScanSummary,
+    TechnologyList,
 )
 from app.services.orchestrator import ScanOrchestrator
 from app.services.scan_service import ScanService
@@ -39,6 +42,8 @@ def _workspace(request: Request) -> WorkspaceManager:
 
 
 def to_summary(job: ScanJob) -> ScanSummary:
+    meta = job.metadata
+    report_ready = bool(job.report_path and Path(job.report_path).is_file())
     return ScanSummary(
         id=job.id,
         filename=job.filename,
@@ -50,10 +55,13 @@ def to_summary(job: ScanJob) -> ScanSummary:
         completed_at=job.completed_at,
         progress=job.progress,
         current_stage=job.current_stage,
-        report_path=job.report_path,
         error=job.error,
         overall_risk=job.overall_risk,
         severity_counts=job.severity_counts,
+        package_name=meta.package_name if meta else None,
+        version_name=meta.version_name if meta else None,
+        report_ready=report_ready,
+        finding_count=len(job.findings),
     )
 
 
@@ -61,12 +69,32 @@ def to_detail(job: ScanJob) -> ScanDetail:
     base = to_summary(job)
     return ScanDetail(
         **base.model_dump(),
-        artifact_path=job.artifact_path,
         metadata=job.metadata,
         coverage=job.coverage,
         stages_completed=job.stages_completed,
-        finding_count=len(job.findings),
-        tool_runs=job.tool_runs,
+        scanners=scanner_coverage(job),
+        pipeline=pipeline_stages(job),
+        correlation_summary=job.correlation_summary,
+        correlated_groups=job.correlated_groups,
+        mobsf=job.mobsf_analysis,
+        vulnerability_assessment=job.vulnerability_assessment,
+        technology_count=len(job.technology_inventory),
+        dependency_scan_coverage=job.dependency_scan_coverage,
+    )
+
+
+@router.get("/config", response_model=PublicConfig)
+async def get_config(request: Request) -> PublicConfig:
+    settings = request.app.state.settings
+    return PublicConfig(
+        app_name=settings.app_name,
+        max_upload_bytes=settings.max_upload_bytes,
+        allowed_extensions=list(settings.allowed_extensions),
+        mobsf_enabled=bool(settings.mobsf_enabled),
+        mobsf_configured=bool(settings.mobsf_enabled and (settings.mobsf_url or "").strip()),
+        jadx_configured=bool((settings.jadx_bin or "").strip()),
+        apktool_configured=bool((settings.apktool_bin or "").strip()),
+        advisory_network_enabled=bool(settings.advisory_network_enabled),
     )
 
 
@@ -108,7 +136,19 @@ async def get_findings(scan_id: str, request: Request) -> FindingList:
     job = await _service(request).get(scan_id)
     if job is None:
         raise HTTPException(status_code=404, detail="scan not found")
-    return FindingList(scan_id=job.id, findings=job.findings)
+    return FindingList(scan_id=job.id, findings=job.findings, groups=job.correlated_groups)
+
+
+@router.get("/scans/{scan_id}/technologies", response_model=TechnologyList)
+async def get_technologies(scan_id: str, request: Request) -> TechnologyList:
+    job = await _service(request).get(scan_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="scan not found")
+    return TechnologyList(
+        scan_id=job.id,
+        technologies=job.technology_inventory,
+        coverage=job.dependency_scan_coverage,
+    )
 
 
 @router.get("/scans/{scan_id}/report")
@@ -127,7 +167,7 @@ async def get_report(scan_id: str, request: Request, download: bool = False):
             media_type="text/markdown; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="security-report-{scan_id}.md"'},
         )
-    return ReportResponse(scan_id=job.id, path=job.report_path, markdown=markdown)
+    return ReportResponse(scan_id=job.id, markdown=markdown)
 
 
 @router.get("/scans/{scan_id}/artifacts", response_model=ArtifactList)

@@ -39,7 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application = FastAPI(
         title=resolved.app_name,
         version=__version__,
-        description="Local-first mobile application QA and security analysis platform (Milestone 1).",
+        description="Local-first mobile application QA and security analysis platform.",
         lifespan=lifespan,
     )
     application.add_middleware(
@@ -53,7 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @application.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok", "version": __version__, "milestone": "1"}
+        return {"status": "ok", "version": __version__, "milestone": "2.9"}
 
     return application
 
