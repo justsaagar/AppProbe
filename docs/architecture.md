@@ -29,7 +29,7 @@ backend/app/
 4. MobSF adapter (skipped if unavailable)
 5. JADX adapter (skipped if unavailable)
 6. apktool adapter (skipped if unavailable)
-7. Secret detector (APK entries, JADX/apktool output when present)
+7. Secret detector (APK entries, JADX/apktool output when present; coverage recorded)
 8. Dependency / SDK detector
 9. Deterministic correlation
 10. Record runtime / dynamic / AI as **NOT EXECUTED**
@@ -66,6 +66,22 @@ apktool provides decoded application artifacts for downstream analysis.
 The apktool adapter itself does not generate security findings. See
 [docs/milestone-2-3.md](milestone-2-3.md).
 
+## Secret scanner (Milestone 2.4)
+
+`SecretScanner` inspects the raw APK and any JADX/apktool output already on
+disk. It emits normalized `Finding` records with confidence, verification,
+redacted evidence, and category-specific recommendations.
+
+The secret scanner performs deterministic local analysis.
+
+It does not validate credentials against external services.
+
+It does not attempt to use or exploit discovered credentials.
+
+AI-assisted analysis is not part of this milestone.
+
+See [docs/milestone-2-4.md](milestone-2-4.md).
+
 ## Finding model
 
 Normalized `Finding` records include `source`, `sources` (after merge),
@@ -81,3 +97,6 @@ optional CWE/OWASP/MASVS mappings that are only set when known.
 | Network interception | Milestone 5 |
 | LLM analysis | Milestone 6 |
 | Dashboard UI, full AAB install path | Milestone 7 |
+
+Secret scanning in Milestone 2.4 is local and deterministic. It does not
+call provider APIs, does not exploit credentials, and does not use an LLM.

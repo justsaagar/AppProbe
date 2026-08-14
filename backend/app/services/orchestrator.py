@@ -27,7 +27,7 @@ from app.models.enums import (
     ToolStatus,
 )
 from app.models.finding import Evidence, Finding
-from app.models.scan_job import CoverageNote, ScanJob, utcnow
+from app.models.scan_job import CoverageNote, ScanJob, SecretScanCoverage, utcnow
 from app.models.state import transition
 from app.reporters.markdown import MarkdownReporter
 from app.scanners.base import ScanContext, Scanner
@@ -426,6 +426,13 @@ class ScanOrchestrator:
                 reason = f"{scanner_name} failed: {exc}"
         elif scanner is not None:
             reason = f"{scanner_name} not applicable for this artifact"
+        if scanner_name == "secret-scanner":
+            job.secret_scan_coverage = _coverage_from_extras(extras)
+            if executed and job.secret_scan_coverage and job.secret_scan_coverage.sources:
+                reason = (
+                    f"{scanner_name} completed. Sources: "
+                    + ", ".join(job.secret_scan_coverage.sources)
+                )
         job.coverage.append(CoverageNote(area=scanner_name, executed=executed, reason=reason))
         job.stages_completed.append(scanner_name if executed else f"{scanner_name}_skipped")
         await self.store.save(job)
@@ -559,3 +566,17 @@ class ScanOrchestrator:
         job.coverage.append(
             CoverageNote(area="markdown report", executed=True, reason="security-report.md generated from scanner evidence")
         )
+
+
+def _coverage_from_extras(extras: dict[str, Any]) -> SecretScanCoverage | None:
+    payload = extras.get("secret_scan_coverage")
+    if payload is None:
+        return None
+    if isinstance(payload, SecretScanCoverage):
+        return payload
+    if isinstance(payload, dict):
+        try:
+            return SecretScanCoverage.model_validate(payload)
+        except Exception:  # noqa: BLE001
+            return None
+    return None

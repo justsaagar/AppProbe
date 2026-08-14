@@ -16,6 +16,21 @@ contain real credentials.
 - Generated APK/AAB/IPA files, scan workspaces, reports, and tool output stay
   local unless they are intentionally versioned. They are gitignored.
 
+## Secret scanner (Milestone 2.4)
+
+The secret scanner performs deterministic local analysis.
+
+It does not validate credentials against external services.
+
+It does not attempt to use or exploit discovered credentials.
+
+AI-assisted analysis is not part of this milestone.
+
+Findings never include the complete secret. Private keys are rendered as
+`-----BEGIN PRIVATE KEY----- [REDACTED]`. Firebase client configuration
+(`google-services.json`, project IDs, client API keys) is not classified as a
+vulnerability; service-account private keys are.
+
 ## Historical GitGuardian incidents
 
 GitGuardian reported three findings in commit `9f26f4c` (file

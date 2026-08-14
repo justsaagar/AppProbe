@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         env_file=(_repo_root() / ".env", Path(".env")),
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "AppProbe"
@@ -35,8 +36,30 @@ class Settings(BaseSettings):
     scan_stage_timeout_seconds: int = 300
     tool_timeout_seconds: int = 180
     tool_max_output_bytes: int = 1_048_576
-    max_secret_file_bytes: int = 2 * 1024 * 1024
+    max_secret_file_bytes: int = Field(
+        default=2 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "SECRET_SCAN_MAX_FILE_BYTES",
+            "MAX_SECRET_FILE_BYTES",
+            "max_secret_file_bytes",
+        ),
+    )
     max_secret_scan_files: int = 4000
+    max_secret_scan_total_bytes: int = Field(
+        default=32 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "SECRET_SCAN_MAX_TOTAL_BYTES",
+            "MAX_SECRET_SCAN_TOTAL_BYTES",
+            "max_secret_scan_total_bytes",
+        ),
+    )
+    secret_scan_binary_string_limit: int = Field(
+        default=2000,
+        validation_alias=AliasChoices(
+            "SECRET_SCAN_BINARY_STRING_LIMIT",
+            "secret_scan_binary_string_limit",
+        ),
+    )
 
     mobsf_url: str = ""
     mobsf_api_key: str = ""

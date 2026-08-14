@@ -3,11 +3,22 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2.3**: apktool decode
-adapter on the reusable external-tool executor.
+actual analysis. This repository is at **Milestone 2.4**: a deterministic
+secret scanner over the raw APK plus optional JADX/apktool output.
 
 Runtime testing, network interception, LLM analysis, and the dashboard are
 **not** implemented and are **not faked**.
+
+## Milestone 2.4 — deterministic secret scanner
+
+- Scans the raw APK and, when present, JADX and apktool output
+- Detects private keys, cloud/API credentials, JWTs, bearer tokens, passwords,
+  and credential-bearing database URLs
+- Applies validation, confidence, severity, and redaction without an LLM
+- Does **not** validate or exploit credentials and does **not** call the network
+- Records secret-scan coverage (files scanned/skipped, bytes, sources)
+
+See [docs/milestone-2-4.md](docs/milestone-2-4.md).
 
 ## Milestone 2.3 — apktool adapter
 
@@ -139,5 +150,5 @@ in an emulator.
 
 See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/milestone-1.md),
 [docs/milestone-2.md](docs/milestone-2.md), [docs/milestone-2-1.md](docs/milestone-2-1.md),
-[docs/milestone-2-2.md](docs/milestone-2-2.md), and
-[docs/milestone-2-3.md](docs/milestone-2-3.md).
+[docs/milestone-2-2.md](docs/milestone-2-2.md), [docs/milestone-2-3.md](docs/milestone-2-3.md),
+and [docs/milestone-2-4.md](docs/milestone-2-4.md).

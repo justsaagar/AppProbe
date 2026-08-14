@@ -14,14 +14,35 @@ _PATTERNS: list[re.Pattern[str]] = [
     ),
 ]
 
+_PEM_BLOCK = re.compile(
+    r"-----BEGIN ((?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY)-----"
+    r".*?"
+    r"-----END \1-----",
+    re.S,
+)
+_PEM_HEADER = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")
+
 
 def redact_secret(value: str, *, keep_prefix: int = 8, keep_suffix: int = 4) -> str:
     """Mask a credential for display. Never emit the full secret."""
     if not value:
         return value
+    pem = redact_private_key(value)
+    if pem is not None:
+        return pem
     if len(value) <= keep_prefix + keep_suffix:
         return "*" * len(value)
-    return f"{value[:keep_prefix]}{'*' * max(8, len(value) - keep_prefix - keep_suffix)}{value[-keep_suffix:]}"
+    hidden = max(8, len(value) - keep_prefix - keep_suffix)
+    return f"{value[:keep_prefix]}{'*' * hidden}{value[-keep_suffix:]}"
+
+
+def redact_private_key(value: str) -> str | None:
+    """Return header-only PEM redaction, or None if this is not a private key."""
+    stripped = value.strip()
+    match = _PEM_HEADER.search(stripped)
+    if match is None:
+        return None
+    return "-----BEGIN PRIVATE KEY----- [REDACTED]"
 
 
 def redact_text(text: str) -> str:
@@ -30,7 +51,7 @@ def redact_text(text: str) -> str:
     def _jwt(match: re.Match[str]) -> str:
         return f"{match.group(1)}{'*' * 12}.{redact_secret(match.group(3), keep_prefix=0, keep_suffix=4)}"
 
-    redacted = text
+    redacted = _PEM_BLOCK.sub("-----BEGIN PRIVATE KEY----- [REDACTED]", text)
     for pattern in _PATTERNS:
         if pattern.pattern.startswith("(eyJ"):
             redacted = pattern.sub(_jwt, redacted)

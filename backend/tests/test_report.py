@@ -71,6 +71,7 @@ def test_report_contains_required_sections() -> None:
         "No LLM",
         "## Static Analysis Coverage",
         "## Secrets & Sensitive Data",
+        "## Secret Scan Coverage",
         "## Correlated Findings",
         "Manifest Scanner",
     ]

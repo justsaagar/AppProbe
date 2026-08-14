@@ -14,6 +14,8 @@ from app.models.scan_job import (
     CorrelatedGroup,
     CoverageNote,
     ScanJob,
+    SecretScanCoverage,
+    SkippedScanFile,
     ToolRunRecord,
 )
 
@@ -28,6 +30,8 @@ __all__ = [
     "Platform",
     "ScanJob",
     "ScanStatus",
+    "SecretScanCoverage",
+    "SkippedScanFile",
     "Severity",
     "ToolExecutionStatus",
     "ToolRunRecord",
