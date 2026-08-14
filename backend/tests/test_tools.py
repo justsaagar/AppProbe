@@ -7,10 +7,9 @@ from app.models.enums import ToolStatus
 from app.scanners.base import ScanContext
 from app.scanners.tools.apktool import ApktoolTool
 from app.scanners.tools.base import resolve_binary
-from app.scanners.tools.jadx import JadxTool
 from app.scanners.tools.mobsf import MobsfTool, parse_mobsf_report
 from app.storage.workspace import ScanWorkspace
-from app.utils.subprocess import SubprocessError, SubprocessResult
+from app.utils.subprocess import SubprocessResult
 from tests.helpers import write_apk
 
 
@@ -43,16 +42,6 @@ async def test_mobsf_unavailable(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_jadx_unavailable(tmp_path: Path) -> None:
-    settings = Settings(workspace_dir=tmp_path / "ws", jadx_bin="/definitely/missing-jadx")
-    tool = JadxTool(settings)
-    tool._bin = None
-    apk = write_apk(tmp_path / "app.apk")
-    result = await tool.run(_context(tmp_path, apk))
-    assert result.status is ToolStatus.NOT_AVAILABLE
-
-
-@pytest.mark.asyncio
 async def test_apktool_unavailable(tmp_path: Path) -> None:
     settings = Settings(workspace_dir=tmp_path / "ws")
     tool = ApktoolTool(settings)
@@ -60,27 +49,6 @@ async def test_apktool_unavailable(tmp_path: Path) -> None:
     apk = write_apk(tmp_path / "app.apk")
     result = await tool.run(_context(tmp_path, apk))
     assert result.status is ToolStatus.NOT_AVAILABLE
-
-
-@pytest.mark.asyncio
-async def test_jadx_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    settings = Settings(workspace_dir=tmp_path / "ws")
-    tool = JadxTool(settings)
-    tool._bin = "/bin/true"
-
-    async def boom(*_args, **_kwargs):
-        raise SubprocessError("command timed out after 1s: jadx")
-
-    monkeypatch.setattr("app.scanners.tools.jadx.run_command", boom)
-    monkeypatch.setattr("app.scanners.tools.jadx.capture_version", _async_none)
-    apk = write_apk(tmp_path / "app.apk")
-    result = await tool.run(_context(tmp_path, apk))
-    assert result.status is ToolStatus.AVAILABLE_BUT_FAILED
-    assert "timed out" in result.reason.lower()
-
-
-async def _async_none(*_args, **_kwargs):
-    return None
 
 
 @pytest.mark.asyncio
@@ -100,31 +68,6 @@ async def test_apktool_nonzero_without_output(tmp_path: Path, monkeypatch: pytes
     apk = write_apk(tmp_path / "app.apk")
     result = await tool.run(_context(tmp_path, apk))
     assert result.status is ToolStatus.AVAILABLE_BUT_FAILED
-
-
-@pytest.mark.asyncio
-async def test_jadx_success_creates_output_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    settings = Settings(workspace_dir=tmp_path / "ws")
-    tool = JadxTool(settings)
-    tool._bin = "/bin/true"
-
-    async def fake_run(args, **_kwargs):
-        # emulate jadx writing a java file into -d
-        out = Path(args[args.index("-d") + 1])
-        sample = out / "com" / "example" / "Main.java"
-        sample.parent.mkdir(parents=True, exist_ok=True)
-        sample.write_text("class Main {}", encoding="utf-8")
-        return SubprocessResult(args=args, returncode=0, stdout="ok", stderr="")
-
-    async def fake_version(*_args, **_kwargs):
-        return "1.5.0"
-
-    monkeypatch.setattr("app.scanners.tools.jadx.run_command", fake_run)
-    monkeypatch.setattr("app.scanners.tools.jadx.capture_version", fake_version)
-    apk = write_apk(tmp_path / "app.apk")
-    result = await tool.run(_context(tmp_path, apk))
-    assert result.status is ToolStatus.AVAILABLE_AND_EXECUTED
-    assert result.extras["java_file_count"] == 1
 
 
 def test_mobsf_parses_known_sections_only() -> None:

@@ -7,7 +7,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import ArtifactKind, Platform, ScanStatus, ToolStatus
+from app.models.enums import (
+    ArtifactKind,
+    Platform,
+    ScanStatus,
+    ToolExecutionStatus,
+    ToolStatus,
+)
 from app.models.finding import Finding
 
 
@@ -27,6 +33,11 @@ class ToolRunRecord(BaseModel):
     version: str | None = None
     reason: str = ""
     output_dir: str | None = None
+    execution_status: ToolExecutionStatus | None = None
+    exit_code: int | None = None
+    duration_seconds: float | None = None
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
 
 
 class CorrelatedGroup(BaseModel):

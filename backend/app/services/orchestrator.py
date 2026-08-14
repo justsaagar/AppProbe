@@ -365,6 +365,8 @@ class ScanOrchestrator:
             label = None
             if result.status is ToolStatus.NOT_AVAILABLE:
                 label = f"{display_name} - NOT AVAILABLE"
+            elif result.status is ToolStatus.TIMEOUT:
+                label = f"{display_name} - TIMEOUT"
             elif result.status is ToolStatus.AVAILABLE_BUT_FAILED:
                 label = f"{display_name} - FAILED"
             elif result.status is ToolStatus.NOT_EXECUTED:

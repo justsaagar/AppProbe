@@ -45,10 +45,29 @@ async def test_apk_scan_produces_findings_and_report(harness, tmp_path: Path) ->
     skipped = [note for note in result.coverage if not note.executed]
     assert any("emulator" in note.area.lower() or "Emulator" in note.reason for note in skipped)
     assert result.tool_runs
-    assert all(run.status.value in {"NOT_AVAILABLE", "NOT_EXECUTED", "AVAILABLE_AND_EXECUTED", "AVAILABLE_BUT_FAILED"} for run in result.tool_runs)
-    assert any(note.area == "finding correlation" and note.executed for note in result.coverage)
+    assert all(
+        run.status.value
+        in {
+            "NOT_AVAILABLE",
+            "NOT_EXECUTED",
+            "AVAILABLE_AND_EXECUTED",
+            "AVAILABLE_BUT_FAILED",
+            "TIMEOUT",
+        }
+        for run in result.tool_runs
+    )
+    jadx_run = next(run for run in result.tool_runs if run.name == "jadx")
+    assert jadx_run.status.value in {
+        "NOT_AVAILABLE",
+        "AVAILABLE_AND_EXECUTED",
+        "AVAILABLE_BUT_FAILED",
+        "TIMEOUT",
+        "NOT_EXECUTED",
+    }
     assert "Static Analysis Coverage" in report
     assert "MobSF" in report
+    assert "| JADX |" in report
+    assert any(note.area == "finding correlation" and note.executed for note in result.coverage)
 
 
 @pytest.mark.asyncio

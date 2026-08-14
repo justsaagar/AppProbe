@@ -66,6 +66,7 @@ class ToolStatus(StrEnum):
     AVAILABLE_BUT_FAILED = "AVAILABLE_BUT_FAILED"
     NOT_AVAILABLE = "NOT_AVAILABLE"
     NOT_EXECUTED = "NOT_EXECUTED"
+    TIMEOUT = "TIMEOUT"
 
 
 class ToolExecutionStatus(StrEnum):
