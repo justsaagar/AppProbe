@@ -1,0 +1,9 @@
+services:
+  backend:
+    build: ../backend
+    ports:
+      - "8000:8000"
+    environment:
+      MOBILE_AGENT_WORKSPACE_DIR: /workspace
+    volumes:
+      - ../workspace:/workspace
