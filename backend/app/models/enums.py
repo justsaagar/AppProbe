@@ -66,3 +66,16 @@ class ToolStatus(StrEnum):
     AVAILABLE_BUT_FAILED = "AVAILABLE_BUT_FAILED"
     NOT_AVAILABLE = "NOT_AVAILABLE"
     NOT_EXECUTED = "NOT_EXECUTED"
+
+
+class ToolExecutionStatus(StrEnum):
+    """Outcome of a single external-process invocation.
+
+    Distinct from scan-level ``ToolStatus``, which records coverage in reports.
+    """
+
+    AVAILABLE = "AVAILABLE"
+    NOT_AVAILABLE = "NOT_AVAILABLE"
+    EXECUTED = "EXECUTED"
+    FAILED = "FAILED"
+    TIMEOUT = "TIMEOUT"

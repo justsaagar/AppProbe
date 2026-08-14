@@ -7,7 +7,6 @@ return structured status. They never invent findings when a tool is absent.
 from __future__ import annotations
 
 import logging
-import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,9 +17,10 @@ from app.models.finding import Finding
 from app.models.scan_job import ToolRunRecord
 from app.scanners.base import ScanContext
 from app.storage.workspace import ScanWorkspace
-from app.utils.paths import safe_join
+from app.tools.discovery import resolve_executable
+from app.tools.executor import ExternalToolExecutor
 from app.utils.redact import redact_text
-from app.utils.subprocess import SubprocessError, SubprocessResult, run_command
+from app.utils.subprocess import SubprocessResult
 
 logger = logging.getLogger(__name__)
 
@@ -63,29 +63,13 @@ class ExternalTool(ABC):
 
 
 def resolve_binary(explicit: str | None, *candidates: str) -> str | None:
-    if explicit:
-        path = Path(explicit)
-        if path.is_file():
-            return str(path)
-        found = shutil.which(explicit)
-        if found:
-            return found
-    for name in candidates:
-        found = shutil.which(name)
-        if found:
-            return found
-    return None
+    return resolve_executable(explicit, *candidates)
 
 
 async def capture_version(args: list[str], *, timeout: float = 15.0) -> str | None:
-    try:
-        result = await run_command(args, timeout=timeout, check=False)
-    except SubprocessError:
+    if not args:
         return None
-    text = (result.stdout or result.stderr).strip()
-    if not text:
-        return None
-    return text.splitlines()[0][:120]
+    return await ExternalToolExecutor().get_version(args[0], list(args[1:]), timeout=timeout)
 
 
 def write_tool_logs(directory: Path, result: SubprocessResult) -> None:
@@ -103,6 +87,4 @@ def write_tool_logs(directory: Path, result: SubprocessResult) -> None:
 
 
 def tool_output_dir(workspace: ScanWorkspace, name: str) -> Path:
-    path = safe_join(workspace.tools, name)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return workspace.tool_dir(name)

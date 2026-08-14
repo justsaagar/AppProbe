@@ -4,6 +4,7 @@ from app.models.enums import (
     Platform,
     ScanStatus,
     Severity,
+    ToolExecutionStatus,
     ToolStatus,
     Verification,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "ScanJob",
     "ScanStatus",
     "Severity",
+    "ToolExecutionStatus",
     "ToolRunRecord",
     "ToolStatus",
     "Verification",
