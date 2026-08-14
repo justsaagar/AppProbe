@@ -89,6 +89,7 @@ cd backend && PYTHONPATH=. python -m app.cli scan ../workspace/samples/vulnerabl
 ```bash
 make test
 make lint
+make secrets-check
 ```
 
 ## Security notes
@@ -99,8 +100,12 @@ Uploaded binaries are untrusted:
 - File size and extension checks
 - ZIP path-traversal rejection
 - Subprocess calls use argument arrays (no shell interpolation)
-- API keys belong in `.env`, never in source
+- Copy `.env.example` to `.env`; never commit `.env` or real credentials
+- Test fixtures and the sample APK generator must use synthetic values only
+- Generated APK/AAB artifacts, scan workspaces, and reports stay local
 - Report generation redacts common credential patterns
+
+See [docs/security.md](docs/security.md). Run `make secrets-check` before committing.
 
 Do not run untrusted apps on the host. Runtime execution (Milestone 3+) belongs
 in an emulator.

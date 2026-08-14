@@ -3,7 +3,7 @@ VENV ?= .venv
 BIN := $(VENV)/bin
 export PYTHONPATH := backend
 
-.PHONY: setup test lint run scan
+.PHONY: setup test lint run scan secrets-check
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -16,6 +16,10 @@ test:
 
 lint:
 	$(BIN)/ruff check backend/app backend/tests
+	$(PYTHON) scripts/check_no_secrets.py
+
+secrets-check:
+	$(PYTHON) scripts/check_no_secrets.py
 
 run:
 	$(BIN)/uvicorn app.main:app --app-dir backend --reload --host 0.0.0.0 --port 8000

@@ -227,3 +227,28 @@ workspace/reports/**
 workspace/samples/**
 workspace/jobs.json
 !workspace/**/.gitkeep
+
+# Generated mobile artifacts — keep local unless intentionally versioned
+*.apk
+*.aab
+*.apks
+*.ipa
+*.xapk
+
+# Tool extraction / temporary unpack directories
+apktool_out/
+jadx-out/
+jadx_out/
+.mobsf/
+*.apk.out/
+
+# Secret-bearing local files (never commit real credentials)
+.env.*
+!.env.example
+*.pem
+id_rsa
+id_rsa.pub
+credentials.json
+*-service-account.json
+secrets.yaml
+.secrets.*

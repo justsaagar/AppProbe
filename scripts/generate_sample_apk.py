@@ -1,6 +1,7 @@
 """Generate a synthetic vulnerable APK for local Milestone 1 demos.
 
-This does not use a real production application.
+This does not use a real production application and must not embed real
+credentials. Output is written under gitignored `workspace/samples/`.
 """
 
 from __future__ import annotations
