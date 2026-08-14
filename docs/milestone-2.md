@@ -13,7 +13,7 @@ platform without pretending optional tools ran.
 - Deterministic secret detector with redaction and false-positive guards
 - SDK/dependency detector (informational inventory)
 - Vulnerability / advisory matching via OSV (affected versions only)
-- Finding correlation / deduplication that preserves sources and evidence
+- Finding correlation: duplicates, related groups, evidence merge, CORR-NNN report IDs
 - Report sections for tool coverage, secrets, and correlated groups
 - Isolated tool output under `workspace/scans/<id>/tools/`
 

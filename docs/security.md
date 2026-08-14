@@ -56,6 +56,16 @@ The scanner does not exploit vulnerabilities or validate exploitability.
 Queries include only package ecosystem, name, and version. Advisory responses
 are untrusted external data.
 
+## Cross-scanner correlation (Milestone 2.7)
+
+Correlation fingerprints never include secret values, tokens, or private key
+material. Original findings remain available as `raw_findings`.
+
+Correlation is deterministic and does not use AI.
+
+When evidence is insufficient to establish a relationship,
+findings remain separate.
+
 ## Historical GitGuardian incidents
 
 GitGuardian reported three findings in commit `9f26f4c` (file

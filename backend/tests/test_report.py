@@ -76,6 +76,7 @@ def test_report_contains_required_sections() -> None:
         "## Secrets & Sensitive Data",
         "## Secret Scan Coverage",
         "## Correlated Findings",
+        "## Correlation Summary",
         "Manifest Scanner",
     ]
     for section in required:

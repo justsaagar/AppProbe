@@ -145,3 +145,17 @@ Queries send only package ecosystem, name, and installed version. Application
 source, secrets, and artifacts are never uploaded to the advisory API.
 Advisory JSON is treated as untrusted: IDs, versions, ranges, and URLs are
 validated before use.
+
+## Cross-scanner correlation (Milestone 2.7)
+
+`app.analyzers.correlation` groups duplicates and related findings using
+structured keys (path, secret type, package, advisory id). It is not a
+second correlator — the existing module was extended.
+
+Correlation is deterministic and does not use AI.
+
+When evidence is insufficient to establish a relationship,
+findings remain separate.
+
+Original findings are stored as `raw_findings`. Fingerprints never include
+secret values.

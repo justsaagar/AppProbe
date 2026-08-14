@@ -35,6 +35,7 @@ class MarkdownReporter:
             self._severity_summary(job),
             *self._findings_by_severity(job),
             self._secrets_section(job),
+            self._correlation_summary_section(job),
             self._correlated_section(job),
             self._functional_tests(job),
             self._crash_analysis(job),
@@ -480,16 +481,97 @@ class MarkdownReporter:
             lines.extend(["Recommendation:", finding.recommendation, ""])
         return "\n".join(lines)
 
-    def _correlated_section(self, job: ScanJob) -> str:
-        lines = ["## Correlated Findings", ""]
-        if not job.correlated_groups:
-            lines.append("No duplicate groups were merged in this scan.")
+    def _correlation_summary_section(self, job: ScanJob) -> str:
+        summary = job.correlation_summary
+        lines = ["## Correlation Summary", ""]
+        if summary is None:
+            lines.append("Correlation summary was not recorded for this scan.")
             return "\n".join(lines)
+        lines.extend(
+            [
+                f"Raw findings: {summary.raw_findings}",
+                f"Correlated findings: {summary.correlated_findings}",
+                f"Exact duplicates merged: {summary.exact_duplicates_merged}",
+                f"Related groups: {summary.related_groups}",
+                f"Independent findings: {summary.independent_findings}",
+                "",
+                "Correlation is deterministic and does not use AI.",
+                "When evidence is insufficient to establish a relationship, findings remain separate.",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _correlated_section(self, job: ScanJob) -> str:
+        lines = ["## Correlated Findings", "", "# Security Findings", ""]
+        if not job.correlated_groups:
+            lines.append("No duplicate or related groups were formed in this scan.")
+            return "\n".join(lines)
+        by_id = {item.id: item for item in [*job.raw_findings, *job.findings]}
         for group in job.correlated_groups:
-            lines.append(f"- **{group.title}** (`{group.fingerprint}`)")
-            lines.append(f"  - Canonical: `{group.canonical_id}`")
-            lines.append(f"  - Sources: {', '.join(group.sources)}")
-            lines.append(f"  - {group.note}")
+            lines.append(self._render_correlated_group(group, by_id))
+        return "\n".join(lines)
+
+    def _render_correlated_group(self, group, by_id: dict) -> str:
+        primary = by_id.get(group.primary_finding_id or group.canonical_id or "")
+        title = group.title
+        severity = group.severity.value if group.severity is not None else (primary.severity.value if primary else "INFO")
+        confidence = group.confidence
+        if confidence is None and primary is not None:
+            confidence = primary.confidence
+        conf_text = f"{confidence:.2f}" if confidence is not None else "n/a"
+        relationship = group.relationship.value if group.relationship else "DUPLICATE"
+        group_id = group.group_id or group.fingerprint
+        lines = [
+            f"## {group_id}: {title}",
+            "",
+            f"Severity: {severity}",
+            f"Confidence: {conf_text}",
+            f"Relationship: {relationship}",
+            "",
+            "### Primary Finding",
+            "",
+        ]
+        if primary is not None:
+            lines.append(f"{primary.source}:")
+            lines.append(primary.title)
+            lines.append("")
+        else:
+            lines.append(group.title)
+            lines.append("")
+        lines.extend(
+            [
+                "### Corroborating Evidence",
+                "",
+            ]
+        )
+        for source in group.sources:
+            lines.append(f"- {source}")
+        if not group.sources:
+            lines.append("- none")
+        lines.append("")
+        location = ""
+        if primary is not None and primary.evidence:
+            location = primary.evidence[0].location or primary.affected_component or ""
+        if location:
+            lines.extend(["### Location", "", location, ""])
+        if primary is not None and primary.evidence:
+            lines.append("### Evidence")
+            lines.append("")
+            for item in primary.evidence[:8]:
+                loc = f" ({item.location})" if item.location else ""
+                lines.append(f"- `{item.kind}`{loc}: {item.summary}")
+            lines.append("")
+        related = [by_id[item] for item in group.related_finding_ids if item in by_id]
+        if related:
+            lines.append("### Related findings")
+            lines.append("")
+            for item in related:
+                lines.append(f"- `{item.id}` {item.source}: {item.title}")
+            lines.append("")
+        lines.append("Original findings:")
+        for fid in group.finding_ids:
+            lines.append(f"- `{fid}`")
+        lines.append("")
         return "\n".join(lines)
 
     def _functional_tests(self, _job: ScanJob) -> str:
@@ -755,6 +837,10 @@ def _tool_table_rows(job: ScanJob) -> list[tuple[str, ...]]:
         else:
             vuln_status = ToolStatus.AVAILABLE_BUT_FAILED
     rows.append(("Vulnerability / Advisory Scanner", _tool_status_label(vuln_status), "OSV"))
+    corr_status = executed if job.correlation_summary is not None else (
+        executed if any(note.area == "finding correlation" and note.executed for note in job.coverage) else skipped
+    )
+    rows.append(("Correlation", _tool_status_label(corr_status), "AppProbe"))
     mobsf = by_name.get("mobsf")
     if mobsf is None:
         rows.append(("MobSF", "NOT AVAILABLE", "-"))
