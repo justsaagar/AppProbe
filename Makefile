@@ -3,7 +3,7 @@ VENV ?= .venv
 BIN := $(VENV)/bin
 export PYTHONPATH := backend
 
-.PHONY: setup test lint run scan secrets-check
+.PHONY: setup test lint run scan secrets-check frontend web
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -27,3 +27,8 @@ run:
 scan:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make scan FILE=path/to/app.apk"; exit 1; fi
 	$(BIN)/python -m app.cli scan "$(FILE)"
+
+frontend:
+	cd frontend && npm install && npm run dev
+
+web: frontend

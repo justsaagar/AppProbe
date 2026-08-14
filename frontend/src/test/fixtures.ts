@@ -1,0 +1,95 @@
+import type { Finding, ScanDetail, TechnologyRecord } from "../api/types";
+
+export function sampleFinding(overrides: Partial<Finding> = {}): Finding {
+  return {
+    id: "F-1",
+    title: "Embedded Private Key",
+    category: "secrets",
+    severity: "CRITICAL",
+    confidence: 0.99,
+    source: "secret_scanner",
+    sources: ["secret_scanner"],
+    description: "Private key material was detected.",
+    impact: "An attacker could impersonate the application.",
+    recommendation: "Remove embedded secrets.",
+    evidence: [{ kind: "snippet", summary: "-----BEGIN PRIVATE KEY----- [REDACTED]", location: "assets/keys.pem" }],
+    reproducibility: "Present in the packaged APK.",
+    potential: false,
+    verification: "CONFIRMED",
+    ...overrides,
+  };
+}
+
+export const sampleScan: ScanDetail = {
+  id: "s1",
+  filename: "sample.apk",
+  platform: "android",
+  artifact_kind: "apk",
+  status: "COMPLETED",
+  created_at: "2026-08-14T00:00:00Z",
+  started_at: "2026-08-14T00:00:01Z",
+  completed_at: "2026-08-14T00:01:00Z",
+  progress: 100,
+  current_stage: "completed",
+  error: null,
+  overall_risk: "HIGH",
+  severity_counts: { CRITICAL: 1, HIGH: 2, MEDIUM: 0, LOW: 0, INFO: 1 },
+  package_name: "com.example.app",
+  version_name: "1.0",
+  report_ready: true,
+  finding_count: 1,
+  coverage: [{ area: "JADX", executed: false, reason: "JADX was not available in this environment." }],
+  stages_completed: ["validate", "manifest", "secret-scanner"],
+  scanners: [
+    { id: "secret_scanner", name: "Secret scanner", status: "EXECUTED", reason: "Completed" },
+    { id: "mobsf", name: "MobSF", status: "NOT ENABLED", reason: "MobSF is not enabled." },
+  ],
+  pipeline: [],
+  correlation_summary: {
+    raw_findings: 6,
+    correlated_findings: 4,
+    exact_duplicates_merged: 1,
+    related_groups: 1,
+    independent_findings: 3,
+    duplicate_groups: 1,
+  },
+  correlated_groups: [
+    {
+      fingerprint: "fp-1",
+      title: "Embedded Stripe Secret",
+      finding_ids: ["F-1"],
+      sources: ["secret_scanner", "mobsf"],
+      note: "The same secret was reported by multiple scanners.",
+      group_id: "CORR-001",
+      relationship: "DUPLICATE",
+      primary_finding_id: "F-1",
+      related_finding_ids: [],
+      severity: "HIGH",
+      confidence: 0.9,
+    },
+  ],
+  mobsf: {
+    status: "NOT_ENABLED",
+    availability: "NOT_ENABLED",
+    findings_imported: 0,
+    reason: "MobSF is not enabled.",
+    limitations: [],
+  },
+  vulnerability_assessment: {
+    status: "COMPLETE",
+    reason: "",
+    advisory_source: "OSV",
+    vulnerable_packages: 1,
+  },
+  technology_count: 1,
+};
+
+export const sampleOkHttp: TechnologyRecord = {
+  name: "OkHttp",
+  vendor: "Square",
+  category: "NETWORKING",
+  version: "4.9.0",
+  confidence: 0.98,
+  detection_source: "dependency_scanner",
+  sources: ["dependency_scanner"],
+};

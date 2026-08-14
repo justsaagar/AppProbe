@@ -6,6 +6,7 @@ The LLM is a later reasoning layer. Deterministic tools own analysis.
 ## Repository layout
 
 ```
+frontend/       React + TypeScript + Vite dashboard (Milestone 2.9)
 backend/app/
   api/          HTTP routes (FastAPI)
   models/       ScanJob, Finding, enumerations, state machine
@@ -123,7 +124,7 @@ optional CWE/OWASP/MASVS mappings that are only set when known.
 | UI exploration / functional tests | Milestone 4 |
 | Network interception | Milestone 5 |
 | LLM analysis | Milestone 6 |
-| Dashboard UI, full AAB install path | Milestone 7 |
+| Full AAB install path | Milestone 7 |
 
 Secret scanning in Milestone 2.4 is local and deterministic. It does not
 call provider APIs, does not exploit credentials, and does not use an LLM.
@@ -173,3 +174,11 @@ MobSF does not replace AppProbe's deterministic scanners.
 Dynamic analysis is NOT part of Milestone 2.8.
 
 See [docs/milestone-2-8.md](milestone-2-8.md).
+
+## Web dashboard (Milestone 2.9)
+
+The React dashboard in `frontend/` consumes the existing REST API. It does not
+run scanners, compute severity, match advisories, or generate Markdown reports.
+Safe dashboard projections live in `app.api.coverage` and `GET /api/config`.
+
+See [docs/milestone-2-9.md](milestone-2-9.md).

@@ -3,11 +3,20 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2.8**: optional MobSF static
-analysis via REST.
+actual analysis. This repository is at **Milestone 2.9**: premium web dashboard
+on top of the existing static-analysis backend.
 
-Runtime testing, network interception, LLM analysis, and the dashboard are
-**not** implemented and are **not faked**.
+Runtime testing, network interception, LLM analysis, emulator/ADB, and dynamic
+security testing are **not** implemented and are **not faked**.
+
+## Milestone 2.9 — web dashboard
+
+- Dark-first React + TypeScript + Vite + Tailwind UI
+- Upload an APK, watch live scanner progress, and inspect findings
+- Correlation summary, technology inventory, scanner coverage, Markdown download
+- Backend remains the source of truth; the UI does not recalculate severity
+
+See [docs/milestone-2-9.md](docs/milestone-2-9.md).
 
 ## Milestone 2.8 — MobSF static analysis adapter
 
@@ -116,6 +125,16 @@ cp .env.example .env
 make setup
 ```
 
+## Run the dashboard
+
+1. Start the API: `make run` (http://127.0.0.1:8000)
+2. Start the UI: `make web` or `cd frontend && npm install && npm run dev`
+3. Open http://127.0.0.1:5173
+4. Upload an APK and start a scan
+5. Inspect findings, technologies, correlation, and the Markdown report
+
+The Vite dev server proxies `/api` and `/health` to the FastAPI backend.
+
 ## Run the API
 
 ```bash
@@ -123,9 +142,11 @@ make run
 ```
 
 - `POST /api/scans` — upload an artifact (returns a scan ID immediately)
+- `GET  /api/config` — public upload limits and tool configuration flags
 - `GET  /api/scans`
 - `GET  /api/scans/{scan_id}`
 - `GET  /api/scans/{scan_id}/findings`
+- `GET  /api/scans/{scan_id}/technologies`
 - `GET  /api/scans/{scan_id}/report`
 - `GET  /api/scans/{scan_id}/artifacts`
 - `POST /api/scans/{scan_id}/cancel`
@@ -200,5 +221,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/milestone-1.md](docs/mil
 [docs/milestone-2-2.md](docs/milestone-2-2.md), [docs/milestone-2-3.md](docs/milestone-2-3.md),
 and [docs/milestone-2-4.md](docs/milestone-2-4.md),
 [docs/milestone-2-5.md](docs/milestone-2-5.md),
-[docs/milestone-2-6.md](docs/milestone-2-6.md), and
-[docs/milestone-2-7.md](docs/milestone-2-7.md).
+[docs/milestone-2-6.md](docs/milestone-2-6.md),
+[docs/milestone-2-7.md](docs/milestone-2-7.md),
+[docs/milestone-2-8.md](docs/milestone-2-8.md), and
+[docs/milestone-2-9.md](docs/milestone-2-9.md).
