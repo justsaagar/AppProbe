@@ -66,6 +66,22 @@ Correlation is deterministic and does not use AI.
 When evidence is insufficient to establish a relationship,
 findings remain separate.
 
+## MobSF adapter (Milestone 2.8)
+
+MobSF is an optional static-analysis provider. The API key is a credential:
+never commit it, log it, put it in findings, or print HTTP headers that carry
+it. `.env.example` may contain `MOBSF_API_KEY=` with no value.
+
+AppProbe does not depend on MobSF being available. Disabled (`NOT ENABLED`) is
+distinct from an unreachable server (`NOT AVAILABLE`) and from authentication
+failure (`AUTH FAILED`).
+
+The adapter uploads the original APK only to the configured MobSF URL. It does
+not follow redirects to other hosts, does not scrape the UI, and does not
+enable MobSF dynamic analysis.
+
+See [docs/milestone-2-8.md](milestone-2-8.md).
+
 ## Historical GitGuardian incidents
 
 GitGuardian reported three findings in commit `9f26f4c` (file

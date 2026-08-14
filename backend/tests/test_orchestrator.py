@@ -53,6 +53,8 @@ async def test_apk_scan_produces_findings_and_report(harness, tmp_path: Path) ->
             "AVAILABLE_AND_EXECUTED",
             "AVAILABLE_BUT_FAILED",
             "TIMEOUT",
+            "NOT_ENABLED",
+            "AUTH_FAILED",
         }
         for run in result.tool_runs
     )

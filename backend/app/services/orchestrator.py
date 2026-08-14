@@ -29,6 +29,7 @@ from app.models.enums import (
     ToolStatus,
 )
 from app.models.finding import Evidence, Finding
+from app.models.mobsf import MobSFAnalysis
 from app.models.scan_job import CoverageNote, ScanJob, SecretScanCoverage, utcnow
 from app.models.state import transition
 from app.models.technology import DependencyScanCoverage, TechnologyRecord
@@ -343,7 +344,8 @@ class ScanOrchestrator:
             )
             return
         display_name = {"mobsf": "MobSF", "jadx": "JADX", "apktool": "apktool"}[name]
-        if not tool.is_available():
+        always_run = name == "mobsf"
+        if not always_run and not tool.is_available():
             result = tool.skipped(
                 reason=f"{display_name} was not available in the scan environment.",
                 status=ToolStatus.NOT_AVAILABLE,
@@ -379,6 +381,10 @@ class ScanOrchestrator:
             label = None
             if result.status is ToolStatus.NOT_AVAILABLE:
                 label = f"{display_name} - NOT AVAILABLE"
+            elif result.status is ToolStatus.NOT_ENABLED:
+                label = f"{display_name} - NOT ENABLED"
+            elif result.status is ToolStatus.AUTH_FAILED:
+                label = f"{display_name} - AUTH FAILED"
             elif result.status is ToolStatus.TIMEOUT:
                 label = f"{display_name} - TIMEOUT"
             elif result.status is ToolStatus.AVAILABLE_BUT_FAILED:
@@ -389,6 +395,15 @@ class ScanOrchestrator:
                 callback(progress_value, f"[{cli_index}/{CLI_STAGE_COUNT}] {label}")
         job.tool_runs.append(result.record())
         job.findings.extend(result.findings)
+        if name == "mobsf":
+            analysis = result.extras.get("analysis")
+            if isinstance(analysis, MobSFAnalysis):
+                job.mobsf_analysis = analysis
+            elif isinstance(analysis, dict):
+                try:
+                    job.mobsf_analysis = MobSFAnalysis.model_validate(analysis)
+                except Exception:  # noqa: BLE001
+                    job.mobsf_analysis = None
         if name == "jadx":
             source_dir = jadx_source_dir(result.output_dir)
             if source_dir:

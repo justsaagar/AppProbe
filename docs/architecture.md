@@ -12,6 +12,7 @@ backend/app/
   schemas/      API response models
   services/     ScanService + ScanOrchestrator
   scanners/     Manifest, secret, dependency, vulnerability scanners + tools/
+  mobsf/        MobSF REST client, URL validation, report normalization
   advisories/   AdvisoryProvider + OSV.dev client, mapping, version matching
   tools/        External executable discovery + safe process execution
   analyzers/    AXML parser, validator, metadata, severity, correlation
@@ -27,7 +28,7 @@ backend/app/
 1. Validate ZIP/APK/AAB/IPA structure
 2. Extract metadata (Milestone 1 AXML parser remains authoritative)
 3. Manifest scanner
-4. MobSF adapter (skipped if unavailable)
+4. MobSF adapter (NOT ENABLED by default; skipped if unavailable)
 5. JADX adapter (skipped if unavailable)
 6. apktool adapter (skipped if unavailable)
 7. Secret detector (APK entries, JADX/apktool output when present; coverage recorded)
@@ -159,3 +160,16 @@ findings remain separate.
 
 Original findings are stored as `raw_findings`. Fingerprints never include
 secret values.
+
+## MobSF adapter (Milestone 2.8)
+
+`MobsfTool` uses `MobSFClient` to call the configured MobSF REST API. MobSF is
+an optional static-analysis provider. AppProbe does not depend on MobSF being
+available. Findings are normalized into AppProbe's Finding model and then
+correlated with other scanners.
+
+MobSF does not replace AppProbe's deterministic scanners.
+
+Dynamic analysis is NOT part of Milestone 2.8.
+
+See [docs/milestone-2-8.md](milestone-2-8.md).

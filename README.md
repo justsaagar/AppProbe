@@ -3,11 +3,21 @@
 Local-first AI-powered mobile application testing and security analysis platform.
 
 The LLM is a reasoning and reporting layer. Deterministic scanners perform the
-actual analysis. This repository is at **Milestone 2.7**: deterministic
-cross-scanner finding correlation.
+actual analysis. This repository is at **Milestone 2.8**: optional MobSF static
+analysis via REST.
 
 Runtime testing, network interception, LLM analysis, and the dashboard are
 **not** implemented and are **not faked**.
+
+## Milestone 2.8 — MobSF static analysis adapter
+
+- Optional REST integration (`MOBSF_ENABLED=false` by default)
+- Upload / scan / bounded poll / JSON report / cleanup
+- Normalizes MobSF issues into AppProbe `Finding` records
+- Distinguishes NOT ENABLED, NOT AVAILABLE, AUTH FAILED, TIMEOUT, FAILED
+- Does **not** replace AppProbe scanners and does **not** run dynamic analysis
+
+See [docs/milestone-2-8.md](docs/milestone-2-8.md).
 
 ## Milestone 2.7 — cross-scanner finding correlation
 
@@ -95,8 +105,9 @@ requires a supported macOS/device environment and is not executed.
 
 - Python 3.12+
 
-Optional: JADX, apktool (Java), MobSF REST (`MOBSF_URL`) or `mobsfscan`. See
-[docs/milestone-2.md](docs/milestone-2.md).
+Optional: JADX, apktool (Java), local MobSF REST (`MOBSF_ENABLED`, `MOBSF_URL`).
+See [docs/milestone-2.md](docs/milestone-2.md) and
+[docs/milestone-2-8.md](docs/milestone-2-8.md).
 
 ## Setup
 
@@ -132,7 +143,7 @@ Expected:
 [1/11] Validating artifact
 [2/11] Extracting metadata
 [3/11] Running manifest analysis
-[4/11] MobSF - NOT AVAILABLE
+[4/11] MobSF - NOT ENABLED
 [5/11] JADX - NOT AVAILABLE
 [6/11] apktool - NOT AVAILABLE
 [7/11] Running secret detection
@@ -145,7 +156,9 @@ Report:
 workspace/reports/<scan-id>/security-report.md
 ```
 
-If JADX/apktool/MobSF are installed, those lines show EXECUTED instead of NOT AVAILABLE.
+If JADX/apktool are installed, those lines show EXECUTED instead of NOT AVAILABLE.
+If a local MobSF instance is enabled and reachable, MobSF shows EXECUTED instead
+of NOT ENABLED / NOT AVAILABLE.
 Runtime/AI stages are omitted from the CLI counter and recorded as NOT EXECUTED in the report.
 
 Equivalent:

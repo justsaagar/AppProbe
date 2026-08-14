@@ -28,11 +28,19 @@ def _context(tmp_path: Path, apk: Path) -> ScanContext:
 
 
 @pytest.mark.asyncio
-async def test_mobsf_unavailable(tmp_path: Path) -> None:
+async def test_mobsf_disabled_by_default(tmp_path: Path) -> None:
     settings = Settings(workspace_dir=tmp_path / "ws", mobsf_url="")
     tool = MobsfTool(settings)
-    tool._cli = None
-    tool._base_url = ""
+    apk = write_apk(tmp_path / "app.apk")
+    result = await tool.run(_context(tmp_path, apk))
+    assert result.status is ToolStatus.NOT_ENABLED
+    assert result.findings == []
+
+
+@pytest.mark.asyncio
+async def test_mobsf_unavailable_when_enabled_without_url(tmp_path: Path) -> None:
+    settings = Settings(workspace_dir=tmp_path / "ws", mobsf_enabled=True, mobsf_url="")
+    tool = MobsfTool(settings)
     apk = write_apk(tmp_path / "app.apk")
     result = await tool.run(_context(tmp_path, apk))
     assert result.status is ToolStatus.NOT_AVAILABLE

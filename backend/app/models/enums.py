@@ -75,6 +75,8 @@ class ToolStatus(StrEnum):
     NOT_AVAILABLE = "NOT_AVAILABLE"
     NOT_EXECUTED = "NOT_EXECUTED"
     TIMEOUT = "TIMEOUT"
+    NOT_ENABLED = "NOT_ENABLED"
+    AUTH_FAILED = "AUTH_FAILED"
 
 
 class ToolExecutionStatus(StrEnum):

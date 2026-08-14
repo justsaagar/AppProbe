@@ -1,506 +1,345 @@
-"""MobSF adapter (REST API and optional mobsfscan CLI).
+"""MobSF static-analysis adapter (REST only).
 
-AppProbe remains usable when MobSF is not installed. Findings are parsed only
-from real tool output; nothing is invented.
+MobSF is an optional evidence-producing scanner. AppProbe remains usable when
+MobSF is disabled or unreachable. Dynamic analysis is not invoked.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
-import httpx
-
-from app.analyzers.findings import normalize_finding
-from app.analyzers.severity import apply_rule_severity
 from app.config import Settings, get_settings
-from app.models.enums import FindingCategory, Severity, ToolStatus
-from app.models.finding import Evidence, Finding
-from app.scanners.base import ScanContext
-from app.scanners.tools.base import (
-    ExternalTool,
-    ToolRunResult,
-    capture_version,
-    resolve_binary,
-    tool_output_dir,
-    write_tool_logs,
+from app.mobsf.client import HttpMobSFClient, MobSFClient
+from app.mobsf.normalize import (
+    looks_like_report,
+    parse_mobsf_report,
+    report_not_ready,
+    summarize_report,
 )
+from app.mobsf.url import validate_mobsf_url
+from app.models.enums import ArtifactKind, ToolStatus
+from app.models.mobsf import (
+    MobSFAnalysis,
+    MobSFAvailability,
+    MobSFResult,
+    analysis_from_result,
+)
+from app.scanners.base import ScanContext
+from app.scanners.tools.base import ExternalTool, ToolRunResult, tool_output_dir
+from app.utils.http import JsonHttpError
 from app.utils.redact import redact_text
-from app.utils.subprocess import SubprocessError, run_command
 
 logger = logging.getLogger(__name__)
 
-SOURCE = "mobsf"
+Sleep = Callable[[float], Awaitable[None]]
+
+_STATUS_MAP = {
+    MobSFAvailability.NOT_ENABLED: ToolStatus.NOT_ENABLED,
+    MobSFAvailability.NOT_AVAILABLE: ToolStatus.NOT_AVAILABLE,
+    MobSFAvailability.AUTH_FAILED: ToolStatus.AUTH_FAILED,
+    MobSFAvailability.TIMEOUT: ToolStatus.TIMEOUT,
+    MobSFAvailability.FAILED: ToolStatus.AVAILABLE_BUT_FAILED,
+    MobSFAvailability.AVAILABLE: ToolStatus.AVAILABLE_AND_EXECUTED,
+}
 
 
 class MobsfTool(ExternalTool):
     name = "mobsf"
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        client: MobSFClient | None = None,
+        sleeper: Sleep | None = None,
+    ) -> None:
         self.settings = settings or get_settings()
-        self._cli = resolve_binary(None, "mobsfscan", "mobsf")
-        self._base_url = (self.settings.mobsf_url or "").rstrip("/")
+        self._client = client
+        self._sleep = sleeper or asyncio.sleep
 
     def is_available(self) -> bool:
-        return bool(self._base_url or self._cli)
+        return bool(self.settings.mobsf_enabled and ((self.settings.mobsf_url or "").strip() or self._client))
 
     def version(self) -> str | None:
-        return "REST" if self._base_url else None
+        return None
 
     async def run(self, context: ScanContext) -> ToolRunResult:
-        if not self.is_available():
-            return self.skipped(
-                reason="MobSF was not available in the scan environment.",
-                status=ToolStatus.NOT_AVAILABLE,
-            )
         output = tool_output_dir(context.workspace, self.name)
+        started = time.monotonic()
         try:
-            if self._base_url:
-                return await self._run_rest(context, output)
-            return await self._run_cli(context, output)
+            result = await self._analyze(context, output, started)
         except Exception as exc:  # noqa: BLE001
             logger.warning("mobsf failed: %s", redact_text(str(exc)))
-            return ToolRunResult(
-                name=self.name,
-                status=ToolStatus.AVAILABLE_BUT_FAILED,
-                reason=f"MobSF execution failed: {exc}",
-                output_dir=output,
+            result = MobSFResult(
+                status="FAILED",
+                availability=MobSFAvailability.FAILED,
+                reason=f"MobSF execution failed: {redact_text(str(exc))}",
+                duration_seconds=_elapsed(started),
+            )
+        return self._to_tool_result(result, output)
+
+    async def _analyze(self, context: ScanContext, output: Path, started: float) -> MobSFResult:
+        if not self.settings.mobsf_enabled:
+            return MobSFResult(
+                status="NOT ENABLED",
+                availability=MobSFAvailability.NOT_ENABLED,
+                reason="MobSF is disabled (MOBSF_ENABLED=false).",
+                duration_seconds=_elapsed(started),
+            )
+        if context.job.artifact_kind is not ArtifactKind.APK:
+            kind = context.job.artifact_kind.value
+            return MobSFResult(
+                status="NOT EXECUTED",
+                availability=MobSFAvailability.AVAILABLE,
+                reason=f"MobSF static analysis in Milestone 2.8 supports APK only ({kind} skipped).",
+                duration_seconds=_elapsed(started),
             )
 
-    async def _run_cli(self, context: ScanContext, output: Path) -> ToolRunResult:
-        assert self._cli
-        version = await capture_version([self._cli, "--version"])
-        report_path = output / "mobsfscan.json"
-        args = [self._cli, "--json", "-o", str(report_path), str(context.artifact_path)]
         try:
-            result = await run_command(
-                args,
-                timeout=self.settings.tool_timeout_seconds,
-                check=False,
+            client = self._client or self._build_client()
+        except JsonHttpError as exc:
+            availability = (
+                MobSFAvailability.NOT_AVAILABLE if exc.kind in {"unavailable", "invalid_url"} else MobSFAvailability.FAILED
             )
-        except SubprocessError as exc:
-            status = (
-                ToolStatus.AVAILABLE_BUT_FAILED
-                if "timed out" in str(exc)
-                else ToolStatus.AVAILABLE_BUT_FAILED
+            return MobSFResult(
+                status=_label(availability),
+                availability=availability,
+                reason=redact_text(exc.message),
+                duration_seconds=_elapsed(started),
             )
-            return ToolRunResult(
-                name=self.name,
-                status=status,
-                version=version,
-                reason=str(exc),
-                output_dir=output,
+
+        health = await client.health()
+        if health.availability is not MobSFAvailability.AVAILABLE:
+            return MobSFResult(
+                status=_label(health.availability),
+                availability=health.availability,
+                mobsf_version=health.version,
+                reason=health.reason,
+                duration_seconds=_elapsed(started),
             )
-        write_tool_logs(output, result)
-        if result.returncode != 0 and not report_path.is_file():
-            return ToolRunResult(
-                name=self.name,
-                status=ToolStatus.AVAILABLE_BUT_FAILED,
-                version=version,
-                reason=f"mobsfscan exited {result.returncode}",
-                output_dir=output,
+
+        try:
+            upload = await client.upload(context.artifact_path)
+        except JsonHttpError as exc:
+            return _error_result(exc, health.version, started, "upload")
+
+        scan_id = upload.scan_id
+        logger.info("mobsf scan_id=%s status=uploaded", scan_id)
+        payload: dict[str, Any] | None = None
+        try:
+            initiated = await client.scan(
+                scan_id=scan_id,
+                scan_type=upload.scan_type or "apk",
+                file_name=upload.file_name or context.job.filename,
             )
-        payload = _load_json(report_path) or _load_json_text(result.stdout)
+            logger.info("mobsf scan_id=%s status=initiated", scan_id)
+            if looks_like_report(initiated):
+                payload = initiated
+        except JsonHttpError as exc:
+            if exc.kind != "timeout":
+                return _error_result(exc, health.version, started, "scan", scan_id=scan_id)
+            logger.info("mobsf scan_id=%s status=scan-timeout-polling", scan_id)
+
         if payload is None:
-            return ToolRunResult(
-                name=self.name,
-                status=ToolStatus.AVAILABLE_BUT_FAILED,
-                version=version,
-                reason="MobSF CLI produced no parseable JSON report",
-                output_dir=output,
-            )
-        findings = parse_mobsf_report(payload)
-        _write_parsed(output, findings)
-        return ToolRunResult(
-            name=self.name,
-            status=ToolStatus.AVAILABLE_AND_EXECUTED,
-            version=version,
-            reason="mobsfscan completed",
-            output_dir=output,
-            findings=findings,
-        )
+            payload, wait_error = await self._poll_report(client, scan_id)
+            if wait_error is not None:
+                return wait_error.model_copy(
+                    update={
+                        "mobsf_version": wait_error.mobsf_version or health.version,
+                        "duration_seconds": _elapsed(started),
+                    }
+                )
 
-    async def _run_rest(self, context: ScanContext, output: Path) -> ToolRunResult:
-        headers = {}
-        if self.settings.mobsf_api_key:
-            headers["Authorization"] = self.settings.mobsf_api_key
-        timeout = httpx.Timeout(self.settings.tool_timeout_seconds)
+        assert payload is not None
+        findings = parse_mobsf_report(payload)
+        summary = summarize_report(payload)
+        cleanup_ok: bool | None = None
         try:
-            async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
-                if not await _mobsf_reachable(client, self._base_url):
-                    return ToolRunResult(
-                        name=self.name,
-                        status=ToolStatus.NOT_AVAILABLE,
-                        version="REST",
-                        reason=f"MobSF REST endpoint was not reachable at {self._base_url}",
-                        output_dir=output,
-                    )
-                upload = await _upload(client, self._base_url, context.artifact_path)
-                scan_hash = upload.get("hash")
-                if not scan_hash:
-                    return ToolRunResult(
-                        name=self.name,
-                        status=ToolStatus.AVAILABLE_BUT_FAILED,
-                        version="REST",
-                        reason="MobSF upload did not return a scan hash",
-                        output_dir=output,
-                        extras={"upload": _safe_meta(upload)},
-                    )
-                await client.post(
-                    f"{self._base_url}/api/v1/scan",
-                    data={
-                        "hash": scan_hash,
-                        "scan_type": upload.get("scan_type", "apk"),
-                        "file_name": upload.get("file_name", context.job.filename),
-                    },
+            await client.cleanup(scan_id)
+            cleanup_ok = True
+        except Exception as exc:  # noqa: BLE001
+            cleanup_ok = False
+            logger.warning("mobsf cleanup failed scan_id=%s: %s", scan_id, redact_text(str(exc)))
+
+        result = MobSFResult(
+            status="EXECUTED",
+            availability=MobSFAvailability.AVAILABLE,
+            scan_id=scan_id,
+            package_name=_safe_str(summary.get("package_name")),
+            version=_safe_str(summary.get("version_name")),
+            mobsf_version=_safe_str(summary.get("mobsf_version")) or health.version,
+            score=summary.get("security_score") if isinstance(summary.get("security_score"), int | float) else None,
+            findings=findings,
+            metadata={"scan_type": upload.scan_type, "file_name": upload.file_name},
+            raw_summary=summary,
+            duration_seconds=_elapsed(started),
+            cleanup_succeeded=cleanup_ok,
+            reason="MobSF REST static analysis completed.",
+        )
+        _write_summary(output, result)
+        return result
+
+    async def _poll_report(
+        self, client: MobSFClient, scan_id: str
+    ) -> tuple[dict[str, Any] | None, MobSFResult | None]:
+        max_wait = max(0.0, float(self.settings.mobsf_max_wait_seconds))
+        interval = max(0.05, float(self.settings.mobsf_poll_interval_seconds))
+        deadline = time.monotonic() + max_wait
+        while True:
+            try:
+                progress = await client.status(scan_id)
+            except JsonHttpError as exc:
+                return None, _error_result(exc, None, time.monotonic(), "status", scan_id=scan_id)
+            if progress.failed:
+                return None, MobSFResult(
+                    status="FAILED",
+                    availability=MobSFAvailability.FAILED,
+                    scan_id=scan_id,
+                    reason="MobSF reported a failed scan.",
                 )
-                report_resp = await client.post(
-                    f"{self._base_url}/api/v1/report_json",
-                    data={"hash": scan_hash},
+            try:
+                payload = await client.report(scan_id)
+            except JsonHttpError as exc:
+                if exc.kind == "timeout":
+                    return None, _error_result(exc, None, time.monotonic(), "report", scan_id=scan_id)
+                if exc.kind == "auth_failed":
+                    return None, _error_result(exc, None, time.monotonic(), "report", scan_id=scan_id)
+                if exc.status_code in {400, 404}:
+                    payload = {"error": "Report not Found"}
+                elif exc.kind == "invalid_response":
+                    return None, MobSFResult(
+                        status="FAILED",
+                        availability=MobSFAvailability.FAILED,
+                        scan_id=scan_id,
+                        reason="MobSF returned malformed JSON.",
+                    )
+                else:
+                    return None, _error_result(exc, None, time.monotonic(), "report", scan_id=scan_id)
+            if looks_like_report(payload):
+                logger.info("mobsf scan_id=%s status=completed", scan_id)
+                return payload, None
+            if isinstance(payload, dict) and payload.get("error") and not report_not_ready(payload):
+                return None, MobSFResult(
+                    status="FAILED",
+                    availability=MobSFAvailability.FAILED,
+                    scan_id=scan_id,
+                    reason="MobSF returned a malformed or unusable report.",
                 )
-                report_resp.raise_for_status()
-                payload = report_resp.json()
-        except httpx.HTTPError as exc:
-            logger.warning("mobsf rest error: %s", type(exc).__name__)
-            return ToolRunResult(
-                name=self.name,
-                status=ToolStatus.AVAILABLE_BUT_FAILED,
-                version="REST",
-                reason=f"MobSF REST call failed: {type(exc).__name__}",
-                output_dir=output,
-            )
-        (output / "report.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-        findings = parse_mobsf_report(payload)
-        _write_parsed(output, findings)
+            if time.monotonic() >= deadline:
+                logger.info("mobsf scan_id=%s status=timeout", scan_id)
+                return None, MobSFResult(
+                    status="TIMEOUT",
+                    availability=MobSFAvailability.TIMEOUT,
+                    scan_id=scan_id,
+                    reason="MobSF static analysis exceeded MOBSF_MAX_WAIT_SECONDS.",
+                )
+            await self._sleep(interval)
+
+    def _build_client(self) -> HttpMobSFClient:
+        validate_mobsf_url(self.settings.mobsf_url)
+        return HttpMobSFClient(
+            base_url=self.settings.mobsf_url,
+            api_key=self.settings.mobsf_api_key,
+            timeout_seconds=float(self.settings.mobsf_timeout_seconds),
+            connect_timeout_seconds=float(self.settings.mobsf_connect_timeout_seconds),
+            max_response_bytes=int(self.settings.mobsf_max_response_bytes),
+            scan_timeout_seconds=float(self.settings.mobsf_max_wait_seconds),
+        )
+
+    def _to_tool_result(self, result: MobSFResult, output: Path) -> ToolRunResult:
+        if result.status == "NOT EXECUTED":
+            status = ToolStatus.NOT_EXECUTED
+        else:
+            status = _STATUS_MAP.get(result.availability, ToolStatus.AVAILABLE_BUT_FAILED)
+        analysis = analysis_from_result(result)
+        if result.status == "EXECUTED":
+            _write_summary(output, result)
+        else:
+            _write_analysis(output, analysis)
         return ToolRunResult(
             name=self.name,
-            status=ToolStatus.AVAILABLE_AND_EXECUTED,
-            version="REST",
-            reason="MobSF REST scan completed",
+            status=status,
+            version=result.mobsf_version or ("Unknown" if status is ToolStatus.AVAILABLE_AND_EXECUTED else None),
+            reason=result.reason,
             output_dir=output,
-            findings=findings,
+            findings=result.findings,
+            extras={"analysis": analysis, "result": result},
+            duration_seconds=result.duration_seconds,
         )
 
 
-def parse_mobsf_report(payload: dict[str, Any]) -> list[Finding]:
-    """Map MobSF JSON keys we actually understand. Unknown sections are ignored."""
-    if not isinstance(payload, dict):
-        return []
-    findings: list[Finding] = []
-    findings.extend(_from_manifest(payload.get("manifest_analysis")))
-    findings.extend(_from_code(payload.get("code_analysis")))
-    findings.extend(_from_appsec(payload.get("appsec")))
-    findings.extend(_from_trackers(payload.get("trackers")))
-    findings.extend(_from_secrets(payload.get("secrets")))
-    findings.extend(_from_network(payload.get("network_security")))
-    return findings
-
-
-def _from_manifest(section: Any) -> list[Finding]:
-    findings: list[Finding] = []
-    if not isinstance(section, dict):
-        return findings
-    items = section.get("manifest_findings") or section.get("findings") or []
-    if isinstance(section.get("manifest_stat"), dict) and not items:
-        return findings
-    if not isinstance(items, list):
-        return findings
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        title = str(item.get("title") or item.get("name") or item.get("rule") or "").strip()
-        if not title:
-            continue
-        rule_id = _mobsf_rule(title, item)
-        desc = str(item.get("description") or item.get("name") or title)
-        stat = str(item.get("stat") or item.get("severity") or "info").lower()
-        severity = _map_severity(stat, rule_id)
-        component = None
-        if isinstance(item.get("component"), str):
-            component = item["component"]
-        findings.append(
-            normalize_finding(
-                source=SOURCE,
-                rule_id=rule_id,
-                title=f"MobSF: {title}",
-                category=_category_for(rule_id),
-                severity=severity,
-                confidence=0.7,
-                description=desc,
-                evidence=[
-                    Evidence(
-                        kind="mobsf",
-                        summary=title,
-                        location="MobSF manifest_analysis",
-                        data={"stat": stat},
-                    )
-                ],
-                affected_component=component or "manifest",
-                reproducibility="Reported by MobSF static analysis.",
-                potential=severity is not Severity.INFO and rule_id not in {"debuggable", "cleartext_traffic", "allow_backup"},
-            )
-        )
-    return findings
-
-
-def _from_code(section: Any) -> list[Finding]:
-    findings: list[Finding] = []
-    if not isinstance(section, dict):
-        return findings
-    # MobSF: { "android_logging": { "files": {...}, "metadata": {...} }, ... }
-    for key, value in section.items():
-        if key in {"findings", "metadata"} and isinstance(value, dict):
-            continue
-        if not isinstance(value, dict):
-            continue
-        meta = value.get("metadata") if isinstance(value.get("metadata"), dict) else {}
-        title = str(meta.get("description") or key).strip()
-        severity = _map_severity(str(meta.get("severity") or "info"), key)
-        files = value.get("files") if isinstance(value.get("files"), dict) else {}
-        locations = list(files.keys())[:8]
-        findings.append(
-            normalize_finding(
-                source=SOURCE,
-                rule_id=_mobsf_rule(title, {"rule": key}),
-                title=f"MobSF: {title}",
-                category=FindingCategory.CODE,
-                severity=severity,
-                confidence=0.55,
-                description=title,
-                evidence=[
-                    Evidence(
-                        kind="mobsf",
-                        summary=f"{len(locations)} location(s) cited by MobSF",
-                        location=locations[0] if locations else "code_analysis",
-                        data={"rule": key, "locations": locations},
-                    )
-                ],
-                affected_component=key,
-                reproducibility="Reported by MobSF code analysis. Treat as a lead unless corroborated.",
-                potential=True,
-            )
-        )
-    return findings
-
-
-def _from_appsec(section: Any) -> list[Finding]:
-    # High-level scores only — do not turn dashboard counts into extra vulns.
-    return []
-
-
-def _from_trackers(section: Any) -> list[Finding]:
-    findings: list[Finding] = []
-    if not isinstance(section, dict):
-        return findings
-    trackers = section.get("trackers") or []
-    if not isinstance(trackers, list):
-        return findings
-    names = [str(item.get("name")) for item in trackers if isinstance(item, dict) and item.get("name")]
-    if not names:
-        return findings
-    findings.append(
-        normalize_finding(
-            source=SOURCE,
-            rule_id="sdk_detected",
-            title=f"MobSF trackers detected: {', '.join(names[:8])}",
-            category=FindingCategory.DEPENDENCY,
-            severity=Severity.INFO,
-            confidence=0.8,
-            description=(
-                "MobSF reported tracker/SDK signatures. This is informational technology detection, "
-                "not a confirmed vulnerability."
-            ),
-            evidence=[
-                Evidence(kind="mobsf", summary=", ".join(names), location="trackers")
-            ],
-            affected_component="trackers",
-            reproducibility="MobSF tracker database match.",
-        )
+def _error_result(
+    exc: JsonHttpError,
+    version: str | None,
+    started: float,
+    stage: str,
+    *,
+    scan_id: str | None = None,
+) -> MobSFResult:
+    availability = _availability_for(exc)
+    return MobSFResult(
+        status=_label(availability),
+        availability=availability,
+        scan_id=scan_id,
+        mobsf_version=version,
+        reason=f"MobSF {stage} failed: {redact_text(exc.message)}",
+        duration_seconds=_elapsed(started),
     )
-    return findings
 
 
-def _from_secrets(section: Any) -> list[Finding]:
-    findings: list[Finding] = []
-    items: list[Any]
-    if isinstance(section, list):
-        items = section
-    elif isinstance(section, dict):
-        items = section.get("secrets") or section.get("findings") or []
-    else:
-        return findings
-    if not isinstance(items, list):
-        return findings
-    for item in items:
-        text = item if isinstance(item, str) else str((item or {}).get("secret") or (item or {}).get("value") or "")
-        if not text:
-            continue
-        findings.append(
-            normalize_finding(
-                source=SOURCE,
-                rule_id="hardcoded_secret",
-                title="MobSF reported a possible hardcoded secret",
-                category=FindingCategory.SECRETS,
-                severity=apply_rule_severity("hardcoded_secret", potential=True),
-                confidence=0.4,
-                description="MobSF flagged a possible secret. AppProbe treats this as potential until corroborated.",
-                evidence=[
-                    Evidence(
-                        kind="mobsf",
-                        summary="redacted MobSF secret match",
-                        location="secrets",
-                    )
-                ],
-                affected_component="unknown",
-                reproducibility="MobSF secret rule; value redacted.",
-                potential=True,
-            )
-        )
-    return findings
+def _availability_for(exc: JsonHttpError) -> MobSFAvailability:
+    if exc.kind == "auth_failed":
+        return MobSFAvailability.AUTH_FAILED
+    if exc.kind == "timeout":
+        return MobSFAvailability.TIMEOUT
+    if exc.kind in {"unavailable", "invalid_url"}:
+        return MobSFAvailability.NOT_AVAILABLE
+    return MobSFAvailability.FAILED
 
 
-def _from_network(section: Any) -> list[Finding]:
-    findings: list[Finding] = []
-    if not isinstance(section, dict):
-        return findings
-    for key, value in section.items():
-        if not isinstance(value, dict):
-            continue
-        desc = str(value.get("description") or key)
-        if "cleartext" not in desc.lower() and "clear text" not in desc.lower():
-            continue
-        findings.append(
-            normalize_finding(
-                source=SOURCE,
-                rule_id="cleartext_traffic",
-                title="MobSF: cleartext traffic permitted",
-                category=FindingCategory.NETWORK,
-                severity=apply_rule_severity("cleartext_traffic"),
-                confidence=0.75,
-                description=desc,
-                evidence=[Evidence(kind="mobsf", summary=desc, location="network_security")],
-                affected_component="application",
-                reproducibility="MobSF network security analysis.",
-            )
-        )
-    return findings
+def _label(availability: MobSFAvailability) -> str:
+    return {
+        MobSFAvailability.NOT_ENABLED: "NOT ENABLED",
+        MobSFAvailability.NOT_AVAILABLE: "NOT AVAILABLE",
+        MobSFAvailability.AUTH_FAILED: "AUTH FAILED",
+        MobSFAvailability.TIMEOUT: "TIMEOUT",
+        MobSFAvailability.FAILED: "FAILED",
+        MobSFAvailability.AVAILABLE: "EXECUTED",
+    }[availability]
 
 
-def _mobsf_rule(title: str, item: dict[str, Any]) -> str:
-    blob = f"{title} {item.get('rule', '')} {item.get('name', '')}".lower()
-    if "cleartext" in blob or "clear text" in blob:
-        return "cleartext_traffic"
-    if "debuggable" in blob:
-        return "debuggable"
-    if "backup" in blob:
-        return "allow_backup"
-    if "exported" in blob and "provider" in blob:
-        return "exported_provider"
-    if "exported" in blob and "service" in blob:
-        return "exported_service"
-    if "exported" in blob and "receiver" in blob:
-        return "exported_receiver"
-    if "exported" in blob:
-        return "exported_activity"
-    if "webview" in blob:
-        return "webview"
-    if "secret" in blob or "hardcoded" in blob:
-        return "hardcoded_secret"
-    if "crypto" in blob or "cipher" in blob:
-        return "weak_crypto"
-    return "mobsf_finding"
+def _elapsed(started: float) -> float:
+    return round(max(0.0, time.monotonic() - started), 3)
 
 
-def _category_for(rule_id: str) -> FindingCategory:
-    mapping = {
-        "cleartext_traffic": FindingCategory.NETWORK,
-        "debuggable": FindingCategory.MANIFEST,
-        "allow_backup": FindingCategory.STORAGE,
-        "exported_activity": FindingCategory.COMPONENTS,
-        "exported_service": FindingCategory.COMPONENTS,
-        "exported_receiver": FindingCategory.COMPONENTS,
-        "exported_provider": FindingCategory.COMPONENTS,
-        "hardcoded_secret": FindingCategory.SECRETS,
-        "webview": FindingCategory.WEBVIEW,
-        "weak_crypto": FindingCategory.CRYPTO,
-        "sdk_detected": FindingCategory.DEPENDENCY,
-    }
-    return mapping.get(rule_id, FindingCategory.CODE)
+def _safe_str(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
 
 
-def _map_severity(stat: str, rule_id: str) -> Severity:
-    known = apply_rule_severity(rule_id)
-    if rule_id in {
-        "debuggable",
-        "cleartext_traffic",
-        "allow_backup",
-        "exported_activity",
-        "exported_service",
-        "exported_receiver",
-        "exported_provider",
-        "sdk_detected",
-    }:
-        return known
-    lowered = stat.lower()
-    if lowered in {"high", "danger", "critical"}:
-        return Severity.MEDIUM  # cap unknown MobSF items; correlation/evidence must justify HIGH
-    if lowered in {"warning", "medium"}:
-        return Severity.LOW
-    return Severity.INFO
-
-
-async def _mobsf_reachable(client: httpx.AsyncClient, base: str) -> bool:
-    parsed = urlparse(base)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return False
-    try:
-        response = await client.get(f"{base}/api/v1/scans")
-        return response.status_code < 500
-    except httpx.HTTPError:
-        return False
-
-
-async def _upload(client: httpx.AsyncClient, base: str, artifact: Path) -> dict[str, Any]:
-    with artifact.open("rb") as handle:
-        response = await client.post(
-            f"{base}/api/v1/upload",
-            files={"file": (artifact.name, handle, "application/octet-stream")},
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data if isinstance(data, dict) else {}
-
-
-def _safe_meta(payload: dict[str, Any]) -> dict[str, Any]:
-    return {key: payload[key] for key in ("hash", "scan_type", "file_name") if key in payload}
-
-
-def _load_json(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
-        return None
-    try:
-        loaded = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    return loaded if isinstance(loaded, dict) else None
-
-
-def _load_json_text(text: str) -> dict[str, Any] | None:
-    text = text.strip()
-    if not text:
-        return None
-    try:
-        loaded = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-    return loaded if isinstance(loaded, dict) else None
-
-
-def _write_parsed(output: Path, findings: list[Finding]) -> None:
+def _write_summary(output: Path, result: MobSFResult) -> None:
+    output.mkdir(parents=True, exist_ok=True)
+    analysis = analysis_from_result(result)
+    _write_analysis(output, analysis)
     (output / "parsed-findings.json").write_text(
-        json.dumps([item.model_dump(mode="json") for item in findings], indent=2),
+        json.dumps([item.model_dump(mode="json") for item in result.findings], indent=2),
+        encoding="utf-8",
+    )
+    (output / "summary.json").write_text(
+        json.dumps(result.raw_summary, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+
+def _write_analysis(output: Path, analysis: MobSFAnalysis) -> None:
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "analysis.json").write_text(
+        json.dumps(analysis.model_dump(mode="json"), indent=2),
         encoding="utf-8",
     )
